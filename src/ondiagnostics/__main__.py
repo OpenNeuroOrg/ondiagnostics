@@ -1,5 +1,6 @@
 import asyncio
 from enum import Enum
+from pathlib import Path
 from typing import Annotated
 
 import structlog
@@ -8,11 +9,11 @@ from typer import Typer, Option
 
 from .graphql import Dataset, create_client, get_dataset_count, datasets_generator
 from .pipeline import producer, consumer, ProgressQueue
-from .tasks import check_remote
+from .tasks import check_remote, clone_dataset
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from typing import Awaitable, Callable, TypeVar
+    from typing import AsyncIterator, Awaitable, Callable, TypeVar
 
     T = TypeVar("T")
     R = TypeVar("R")
@@ -83,7 +84,10 @@ def add_consumer(
     return out_queue
 
 
-async def run_pipeline() -> int:
+async def run_pipeline(
+    cache_dir: Path | None = None,
+    dry_run: bool = False,
+) -> int:
     """
     Run the OpenNeuro dataset validation pipeline.
 
@@ -114,6 +118,11 @@ async def run_pipeline() -> int:
         )
         queue = add_consumer("Checking", check_remote, queue, 30)
 
+        if cache_dir:
+            queue = add_consumer(
+                "Cloning", lambda d: clone_dataset(d, cache_dir), queue, 10
+            )
+
         while await queue.get() is not None:
             pass
 
@@ -133,6 +142,35 @@ def check_sync(
     # Run the async pipeline
     try:
         return asyncio.run(run_pipeline())
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user")
+        return 130
+    except Exception as e:
+        logger.error("Pipeline failed", exc_info=e)
+        return 1
+
+
+@app.command()
+def clean_s3(
+    config: Annotated[Path | None, Option(help="Path to configuration file")] = None,
+    dry_run: Annotated[bool, Option(help="Run without making changes")] = False,
+    log_level: Annotated[LogLevel, Option(help="Set logging level")] = LogLevel.INFO,
+    ## Would be good to add, but we will need a new GraphQL query to restrict ourselves
+    ## to specific datasets
+    # dataset_ids: Annotated[
+    #     list[str] | None, Argument(help="Optional list of dataset IDs")
+    # ] = None,
+):
+    structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(log_level))
+    logger.debug("Starting clean-s3", dry_run=dry_run, log_level=log_level.value)
+
+    try:
+        return asyncio.run(
+            run_pipeline(
+                cache_dir=Path.home() / ".cache" / "ondiagnostics",
+                dry_run=dry_run,
+            )
+        )
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
         return 130
