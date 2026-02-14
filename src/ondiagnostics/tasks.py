@@ -45,14 +45,16 @@ async def check_remote(dataset: Dataset) -> Dataset | None:
         log.error("Empty response from git ls-remote")
         return None
 
-    shasum, ref = stdout.decode().strip().split(maxsplit=1)
+    stdout_text = stdout.decode().strip()
+
+    shasum, ref = stdout_text.split(maxsplit=1)
 
     if shasum != dataset.hexsha:
         log.warning(f"mismatch: {shasum[:7]}({ref[10:]}) != {dataset.hexsha[:7]}")
         return None
 
     if ref != f"refs/tags/{dataset.tag}":
-        log.error("Tag mismatch", stdout=stdout.decode())
+        log.error("Tag mismatch", stdout=stdout_text)
         return None
 
     return dataset
