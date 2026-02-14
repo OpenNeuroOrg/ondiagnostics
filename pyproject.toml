@@ -1,0 +1,37 @@
+[project]
+name = "ondiagnostics"
+version = "0.1.0"
+description = "Utilities for diagnosing and fixing issues on OpenNeuro."
+readme = "README.md"
+authors = [
+    { name = "Christopher J. Markiewicz", email = "markiewicz@stanford.edu" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "boto3>=1.42.48",
+    "cattrs>=25.3.0",
+    "gql[httpx]>=4.0.0",
+    "pygit2>=1.19.1",
+    "pyyaml>=6.0.3",
+    "rich>=14.3.2",
+    "stamina>=25.2.0",
+    "structlog>=25.5.0",
+    "typer>=0.23.1",
+]
+
+[project.scripts]
+ondiagnostics = "ondiagnostics.__main__:app"
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipython>=9.10.0",
+]
+types = [
+    "boto3-stubs>=1.42.48",
+    "mypy>=1.19.1",
+    "types-pyyaml>=6.0.12.20250915",
+]
