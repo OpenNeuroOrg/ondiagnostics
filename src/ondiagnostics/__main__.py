@@ -31,19 +31,40 @@ class LogLevel(str, Enum):
 type DatasetQueue = ProgressQueue[Dataset | None]
 
 
+def add_producer(
+    name: str,
+    generator: AsyncIterator[Dataset],
+    progress: Progress,
+    total: int,
+    maxsize: int = 200,
+) -> DatasetQueue:
+    """Create a producer that feeds datasets from an async generator into a ProgressQueue."""
+    task_id = progress.add_task(name, total=total, dataset="...")
+    out_queue: DatasetQueue = ProgressQueue(
+        progress=progress, put_task_id=task_id, maxsize=maxsize
+    )
+
+    def on_complete(dataset: Dataset, result: Dataset | None, success: bool) -> None:
+        progress.update(task_id, dataset=dataset.id)
+
+    asyncio.create_task(producer(generator, out_queue, on_complete=on_complete))
+    return out_queue
+
+
 def add_consumer(
     name: str,
     func: Callable[[Dataset], Awaitable[Dataset | None]],
     input_queue: DatasetQueue,
     max_concurrent: int,
 ) -> DatasetQueue:
+    """Create a consumer that processes datasets from an input queue and routes successful results to an output queue."""
     progress = input_queue.progress
-    task_id = progress.add_task(name, dataset="...")
+    task_id = progress.add_task(name, total=0, dataset="...")
     input_queue.get_task_id = task_id
 
     out_queue: DatasetQueue = ProgressQueue(
         progress=progress,
-        maxsize=max_concurrent * 2,
+        maxsize=max_concurrent * 10,
     )
     semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -60,11 +81,6 @@ def add_consumer(
         )
     )
     return out_queue
-
-
-async def consume_queue(queue: asyncio.Queue) -> None:
-    while await queue.get() is not None:
-        pass
 
 
 async def run_pipeline() -> int:
@@ -84,7 +100,7 @@ async def run_pipeline() -> int:
 
     # Get total dataset count for progress tracking
     total = await get_dataset_count(client)
-    logger.info("Total datasets", count=total)
+    logger.debug("Total datasets", count=total)
 
     with Progress(
         TextColumn(
@@ -93,23 +109,13 @@ async def run_pipeline() -> int:
         BarColumn(),
         MofNCompleteColumn(),
     ) as progress:
-        fetch_queue: DatasetQueue = ProgressQueue(
-            progress=progress,
-            put_task_id=progress.add_task("Fetching", total=total, dataset="..."),
-            maxsize=200,
+        queue = add_producer(
+            "Fetching", datasets_generator(client), progress, total=total
         )
+        queue = add_consumer("Checking", check_remote, queue, 30)
 
-        asyncio.create_task(
-            producer(
-                generator=datasets_generator(client),
-                queue=fetch_queue,
-                on_complete=lambda dataset, result, success: progress.update(
-                    fetch_queue.put_task_id, dataset=dataset.id
-                ),
-            )
-        )
-        queue = add_consumer("Checking", check_remote, fetch_queue, 20)
-        await consume_queue(queue)
+        while await queue.get() is not None:
+            pass
 
     return 0
 
@@ -128,7 +134,7 @@ def check_sync(
     try:
         return asyncio.run(run_pipeline())
     except KeyboardInterrupt:
-        logger.info("Interrupted by user")
+        logger.warning("Interrupted by user")
         return 130
     except Exception as e:
         logger.error("Pipeline failed", exc_info=e)
