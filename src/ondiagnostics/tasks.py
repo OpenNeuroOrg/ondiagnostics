@@ -22,7 +22,7 @@ async def git(*args: str) -> tuple[int, bytes, bytes]:
     return proc.returncode, stdout, stderr
 
 
-async def check_remote_worker(dataset: Dataset) -> Dataset | None:
+async def check_remote(dataset: Dataset) -> Dataset | None:
     """
     Check if the git remote has the expected tag and commit hash.
 
