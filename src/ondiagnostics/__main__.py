@@ -3,13 +3,15 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
+import boto3
 import structlog
 from rich.progress import Progress, TextColumn, BarColumn, MofNCompleteColumn
 from typer import Typer, Option
 
+from .awsconfig import AWSConfig
 from .graphql import Dataset, create_client, get_dataset_count, datasets_generator
 from .pipeline import producer, consumer, ProgressQueue
-from .tasks import check_remote, clone_dataset
+from .tasks import check_remote, clone_dataset, s3_cleanup
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -86,6 +88,7 @@ def add_consumer(
 
 async def run_pipeline(
     cache_dir: Path | None = None,
+    bucket: boto3.resources.base.ServiceResource | None = None,
     dry_run: bool = False,
 ) -> int:
     """
@@ -118,9 +121,15 @@ async def run_pipeline(
         )
         queue = add_consumer("Checking", check_remote, queue, 30)
 
-        if cache_dir:
+        if bucket and cache_dir:
             queue = add_consumer(
                 "Cloning", lambda d: clone_dataset(d, cache_dir), queue, 10
+            )
+            queue = add_consumer(
+                "Cleaning S3",
+                lambda d: s3_cleanup(d, cache_dir, bucket, dry_run),
+                queue,
+                5,
             )
 
         while await queue.get() is not None:
@@ -164,10 +173,20 @@ def clean_s3(
     structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(log_level))
     logger.debug("Starting clean-s3", dry_run=dry_run, log_level=log_level.value)
 
+    aws_config = AWSConfig.from_file(config) if config else AWSConfig.from_env()
+
+    s3 = boto3.resource(
+        "s3",
+        region_name=aws_config.AWS_REGION,
+        aws_access_key_id=aws_config.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=aws_config.AWS_SECRET_ACCESS_KEY,
+    )
+    s3_bucket = s3.Bucket(aws_config.AWS_S3_BUCKET_NAME)
     try:
         return asyncio.run(
             run_pipeline(
                 cache_dir=Path.home() / ".cache" / "ondiagnostics",
+                bucket=s3_bucket,
                 dry_run=dry_run,
             )
         )
