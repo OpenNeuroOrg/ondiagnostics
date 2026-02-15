@@ -7,23 +7,16 @@ from rich.progress import Progress, TaskID
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from typing import AsyncIterator, Awaitable, Callable, Protocol, TypeVar
+    from typing import AsyncIterator, Awaitable, Callable, TypeVar
 
     T = TypeVar("T")
     R = TypeVar("R")
-
-    class ProgressCallback(Protocol):
-        """Protocol for progress callbacks."""
-
-        def __call__(self, value: T, result: R | None, success: bool) -> None:
-            """Called after a worker completes processing a value."""
-            ...
 
 
 async def producer(
     generator: AsyncIterator[T],
     queue: asyncio.Queue[T | None],
-    on_complete: ProgressCallback | None = None,
+    on_complete: Callable[[T], None] | None = None,
 ) -> None:
     """
     Generic producer that consumes an async generator and puts items in a queue.
@@ -36,7 +29,7 @@ async def producer(
         async for item in generator:
             await queue.put(item)
             if on_complete:
-                on_complete(item, None, True)
+                on_complete(item)
     finally:
         await queue.put(None)
 
@@ -46,7 +39,7 @@ async def consumer(
     output_queue: asyncio.Queue[R | None] | None,
     worker: Callable[[T], Awaitable[R | None]],
     semaphore: asyncio.Semaphore,
-    on_complete: ProgressCallback | None = None,
+    on_complete: Callable[[T, R | None, bool], None] | None = None,
 ) -> None:
     """
     Generic consumer that processes datasets with a worker function.

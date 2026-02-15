@@ -47,10 +47,13 @@ def add_producer(
         progress=progress, put_task_id=task_id, maxsize=maxsize
     )
 
-    def on_complete(dataset: Dataset, result: Dataset | None, success: bool) -> None:
-        progress.update(task_id, dataset=dataset.id)
-
-    asyncio.create_task(producer(generator, out_queue, on_complete=on_complete))
+    asyncio.create_task(
+        producer(
+            generator,
+            out_queue,
+            on_complete=lambda d: progress.update(task_id, dataset=d.id),
+        )
+    )
     return out_queue
 
 
@@ -71,16 +74,15 @@ def add_consumer(
     )
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    def on_complete(dataset: Dataset, result: Dataset | None, success: bool) -> None:
-        progress.update(task_id, advance=1, dataset=dataset.id)
-
     asyncio.create_task(
         consumer(
             input_queue=input_queue,
             output_queue=out_queue,
             worker=func,
             semaphore=semaphore,
-            on_complete=on_complete,
+            on_complete=lambda d, r, s: progress.update(
+                task_id, advance=1, dataset=d.id
+            ),
         )
     )
     return out_queue
