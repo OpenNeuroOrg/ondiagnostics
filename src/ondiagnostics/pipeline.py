@@ -57,10 +57,10 @@ async def consumer(
         try:
             result, success = None, False
             try:
-                res = await worker(value)
-                success = res is not None
+                result = await worker(value)
+                success = result is not None
                 if success and output_queue:
-                    await output_queue.put(res)
+                    await output_queue.put(result)
             except Exception as e:
                 logger.error("Worker failed", value=value, exc_info=e)
             finally:
