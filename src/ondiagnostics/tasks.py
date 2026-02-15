@@ -198,10 +198,13 @@ async def s3_cleanup(
     else:
         deleted_count = len(objects_to_delete)
 
-    log.info(
-        "S3 cleanup complete",
-        deleted=deleted_count,
-        kept=kept_count,
-        dry_run=dry_run,
-    )
+    if deleted_count:
+        log.info(
+            "S3 cleanup complete",
+            deleted=deleted_count,
+            kept=kept_count,
+            dry_run=dry_run,
+        )
+    else:
+        log.debug("Clean dataset", kept=kept_count)
     return dataset
