@@ -137,3 +137,69 @@ async def test_consumer_callback() -> None:
     assert completed[2] == (2, 0.5, True)
     assert completed[3] == (3, None, False)  # Filtered out
     assert completed[4] == (4, 0.25, True)
+
+
+@pytest.mark.asyncio
+async def test_consumer_respects_semaphore() -> None:
+    """Test consumer respects semaphore for limiting concurrency."""
+    input_queue: asyncio.Queue[int | None] = asyncio.Queue()
+
+    await producer(as_async(range(20)), input_queue)
+
+    max_concurrent = 0
+    current_concurrent = 0
+
+    async def track_concurrency(x: int) -> int:
+        nonlocal current_concurrent, max_concurrent
+        current_concurrent += 1
+        max_concurrent = max(max_concurrent, current_concurrent)
+        await asyncio.sleep(0.01)  # Simulate work
+        current_concurrent -= 1
+        return x
+
+    semaphore = asyncio.Semaphore(5)
+    await consumer(input_queue, None, track_concurrency, semaphore)
+
+    assert max_concurrent <= 5
+
+
+@pytest.mark.asyncio
+async def test_consumer_terminal_without_output_queue() -> None:
+    """Test consumer works as terminal consumer (no output queue)."""
+    input_queue: asyncio.Queue[int | None] = asyncio.Queue()
+
+    await producer(as_async(range(5)), input_queue)
+
+    processed = []
+
+    async def collector(x: int) -> int:
+        processed.append(x)
+        return x
+
+    semaphore = asyncio.Semaphore(10)
+    await consumer(input_queue, None, collector, semaphore)
+
+    assert sorted(processed) == [0, 1, 2, 3, 4]
+
+
+@pytest.mark.asyncio
+async def test_consumer_processes_concurrently() -> None:
+    """Test that consumer actually processes items concurrently."""
+    input_queue: asyncio.Queue[int | None] = asyncio.Queue()
+
+    await producer(as_async(range(10)), input_queue)
+
+    processing_times = []
+    start_time = asyncio.get_event_loop().time()
+
+    async def slow_worker(x: int) -> int:
+        await asyncio.sleep(0.1)
+        processing_times.append(asyncio.get_event_loop().time() - start_time)
+        return x
+
+    semaphore = asyncio.Semaphore(10)  # Allow all to run concurrently
+    await consumer(input_queue, None, slow_worker, semaphore)
+
+    # With concurrency, all 10 should finish in ~0.1s, not 1.0s
+    total_time = asyncio.get_event_loop().time() - start_time
+    assert total_time < 0.5  # Much less than 10 * 0.1 = 1.0s
