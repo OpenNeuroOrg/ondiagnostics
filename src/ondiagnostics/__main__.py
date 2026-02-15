@@ -121,7 +121,7 @@ async def run_pipeline(
         queue = add_producer(
             "Fetching", datasets_generator(client), progress, total=total
         )
-        queue = add_consumer("Checking", check_remote, queue, 30)
+        queue = add_consumer("Checking", check_remote, queue, 20)
 
         if bucket and cache_dir:
             queue = add_consumer(
@@ -131,7 +131,7 @@ async def run_pipeline(
                 "Cleaning S3",
                 lambda d: s3_cleanup(d, cache_dir, bucket, dry_run),
                 queue,
-                5,
+                10,
             )
 
         while await queue.get() is not None:
