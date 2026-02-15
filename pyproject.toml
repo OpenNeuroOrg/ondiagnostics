@@ -6,6 +6,8 @@ readme = "README.md"
 authors = [
     { name = "Christopher J. Markiewicz", email = "markiewicz@stanford.edu" }
 ]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.14"
 dependencies = [
     "boto3>=1.42.48",
