@@ -13,7 +13,7 @@ TYPE_CHECKING = False
 if TYPE_CHECKING:
     from typing import AsyncIterator
 
-converter = cattrs.Converter()
+converter: cattrs.Converter = cattrs.Converter()
 
 
 @dataclass
@@ -60,7 +60,7 @@ class GraphQLResponse:
 
 
 ENDPOINT = "https://openneuro.org/crn/graphql"
-QUERY = gql.gql("""
+QUERY: gql.GraphQLRequest = gql.gql("""
 query DatasetsWithLatestSnapshots($count: Int, $after: String) {
   datasets(
     first: $count,

@@ -8,6 +8,7 @@ import structlog
 from rich.progress import Progress, TextColumn, BarColumn, MofNCompleteColumn
 from typer import Typer, Option
 
+from . import logger
 from .awsconfig import AWSConfig
 from .graphql import Dataset, create_client, get_dataset_count, datasets_generator
 from .pipeline import producer, consumer, ProgressQueue
@@ -20,8 +21,7 @@ if TYPE_CHECKING:
     T = TypeVar("T")
     R = TypeVar("R")
 
-app = Typer()
-logger = structlog.get_logger()
+app: Typer = Typer()
 
 
 class LogLevel(str, Enum):
@@ -183,7 +183,7 @@ def clean_s3(
         aws_access_key_id=aws_config.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=aws_config.AWS_SECRET_ACCESS_KEY,
     )
-    s3_bucket = s3.Bucket(aws_config.AWS_S3_BUCKET_NAME)
+    s3_bucket: Bucket = s3.Bucket(aws_config.AWS_S3_BUCKET_NAME)
     try:
         return asyncio.run(
             run_pipeline(

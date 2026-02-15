@@ -30,7 +30,9 @@ class AWSConfig:
     def from_file(cls, config_path: Path) -> AWSConfig:
         import yaml
 
-        config_data = yaml.safe_load(Path(config_path).read_text())
+        config_data: dict[str, dict[str, dict[str, str]]] = yaml.safe_load(
+            Path(config_path).read_text()
+        )
         try:
             return cls.from_dict(config_data["secrets"]["aws"])
         except KeyError:

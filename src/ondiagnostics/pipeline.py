@@ -1,20 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-import structlog
 from rich.progress import Progress, TaskID
+
+from . import logger
 
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from typing import AsyncIterator, Awaitable, Callable, TypeVar
+    from collections.abc import AsyncIterable
+    from typing import Awaitable, Callable, TypeVar
 
     T = TypeVar("T")
     R = TypeVar("R")
 
 
 async def producer(
-    generator: AsyncIterator[T],
+    generator: AsyncIterable[T],
     queue: asyncio.Queue[T | None],
     on_complete: Callable[[T], None] | None = None,
 ) -> None:
@@ -60,7 +62,6 @@ async def consumer(
                 if success and output_queue:
                     await output_queue.put(res)
             except Exception as e:
-                logger = structlog.get_logger()
                 logger.error("Worker failed", value=value, exc_info=e)
             finally:
                 if on_complete:
@@ -80,6 +81,10 @@ async def consumer(
 
 class ProgressQueue[T](asyncio.Queue[T]):
     """Queue that updates a progress bar as items are added and removed."""
+
+    progress: Progress
+    put_task_id: TaskID | None
+    get_task_id: TaskID | None
 
     def __init__(
         self,

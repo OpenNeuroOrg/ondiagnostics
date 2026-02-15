@@ -3,8 +3,8 @@
 import asyncio
 
 import pygit2
-import structlog
 
+from . import logger
 from .graphql import Dataset
 
 TYPE_CHECKING = False
@@ -33,9 +33,6 @@ if TYPE_CHECKING:
         objects: S3Objects
 
         def delete_objects(self, Delete: S3DeleteRequest) -> DeletionResult: ...
-
-
-logger = structlog.get_logger()
 
 
 async def git(*args: str) -> tuple[int, bytes, bytes]:
