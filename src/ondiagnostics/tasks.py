@@ -79,7 +79,7 @@ async def clone_dataset(dataset: Dataset, cache_dir: Path) -> Dataset | None:
     """
     log = logger.bind(dataset=dataset.id, tag=dataset.tag)
     repo_url = f"https://github.com/OpenNeuroDatasets/{dataset.id}.git"
-    dataset_path = cache_dir / dataset.id
+    dataset_path = cache_dir / f"{dataset.id}.git"
 
     if dataset_path.exists():
         repo = pygit2.Repository(dataset_path)
@@ -88,7 +88,13 @@ async def clone_dataset(dataset: Dataset, cache_dir: Path) -> Dataset | None:
             log.debug("Existing dataset already has the tag, assume clean")
             return dataset
         log.debug("Updating existing dataset")
-        ret, _, stderr = await git("-C", str(dataset_path), "fetch", "--tags")
+        ret, _, stderr = await git(
+            "-C",
+            str(dataset_path),
+            "fetch",
+            "origin",
+            dataset.tag,
+        )
 
         if ret != 0:
             error_msg = stderr.decode()
@@ -99,6 +105,7 @@ async def clone_dataset(dataset: Dataset, cache_dir: Path) -> Dataset | None:
         cache_dir.mkdir(parents=True, exist_ok=True)
         ret, stdout, stderr = await git(
             "clone",
+            "--bare",
             "--filter=blob:none",
             "--depth=1",
             "--branch",
@@ -131,7 +138,7 @@ async def s3_cleanup(
         The dataset if successful, None on failure
     """
     log = logger.bind(dataset=dataset.id, tag=dataset.tag)
-    dataset_path = cache_dir / dataset.id
+    dataset_path = cache_dir / f"{dataset.id}.git"
 
     # Get the tree from the git repository
     repo = pygit2.Repository(dataset_path)
