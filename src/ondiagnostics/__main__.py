@@ -11,7 +11,7 @@ from typer import Typer, Option
 from .awsconfig import AWSConfig
 from .graphql import Dataset, create_client, get_dataset_count, datasets_generator
 from .pipeline import producer, consumer, ProgressQueue
-from .tasks import check_remote, clone_dataset, s3_cleanup
+from .tasks import Bucket, check_remote, clone_dataset, s3_cleanup
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -88,7 +88,7 @@ def add_consumer(
 
 async def run_pipeline(
     cache_dir: Path | None = None,
-    bucket: boto3.resources.base.ServiceResource | None = None,
+    bucket: Bucket | None = None,
     dry_run: bool = False,
 ) -> int:
     """
@@ -142,7 +142,7 @@ async def run_pipeline(
 def check_sync(
     dry_run: Annotated[bool, Option(help="Run without making changes")] = False,
     log_level: Annotated[LogLevel, Option(help="Set logging level")] = LogLevel.INFO,
-):
+) -> int:
     """
     Check synchronization status.
     """
@@ -169,7 +169,7 @@ def clean_s3(
     # dataset_ids: Annotated[
     #     list[str] | None, Argument(help="Optional list of dataset IDs")
     # ] = None,
-):
+) -> int:
     structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(log_level))
     logger.debug("Starting clean-s3", dry_run=dry_run, log_level=log_level.value)
 

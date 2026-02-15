@@ -7,6 +7,7 @@ import httpx
 import stamina
 import gql
 from gql.transport.httpx import HTTPXAsyncTransport
+from gql.transport.exceptions import TransportQueryError
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -123,7 +124,7 @@ async def datasets_generator(client: gql.Client) -> AsyncIterator[Dataset]:
     while page_info.hasNextPage:
         try:
             result = await get_page(client, 100, page_info.endCursor)
-        except gql.transport.exceptions.TransportQueryError as e:
+        except TransportQueryError as e:
             import structlog
 
             logger = structlog.get_logger()

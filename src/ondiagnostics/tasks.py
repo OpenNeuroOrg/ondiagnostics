@@ -10,7 +10,30 @@ from .graphql import Dataset
 TYPE_CHECKING = False
 if TYPE_CHECKING:
     from pathlib import Path
-    from boto3.resources.base import ServiceResource
+    from collections.abc import Iterable
+    from typing import Protocol, TypedDict
+
+    class S3ObjectKey(TypedDict):
+        Key: str
+
+    class S3DeleteRequest(TypedDict):
+        Objects: list[S3ObjectKey]
+
+    class DeletionResult(TypedDict):
+        Deleted: list[S3ObjectKey]
+
+    class S3Object(Protocol):
+        key: str
+
+    class S3Objects(Protocol):
+        def filter(self, Prefix: str) -> Iterable[S3Object]: ...
+
+    class Bucket(Protocol):
+        name: str
+        objects: S3Objects
+
+        def delete_objects(self, Delete: S3DeleteRequest) -> DeletionResult: ...
+
 
 logger = structlog.get_logger()
 
@@ -123,7 +146,7 @@ async def clone_dataset(dataset: Dataset, cache_dir: Path) -> Dataset | None:
 
 
 async def s3_cleanup(
-    dataset: Dataset, cache_dir: Path, s3_bucket: ServiceResource, dry_run: bool = False
+    dataset: Dataset, cache_dir: Path, s3_bucket: Bucket, dry_run: bool = False
 ) -> Dataset | None:
     """
     Clean up S3 files not in the repository tag.
@@ -153,11 +176,11 @@ async def s3_cleanup(
     # log.info("Checking S3 bucket", bucket=s3_bucket.name, prefix=prefix)
 
     # Collect objects to delete (don't delete in the iteration loop)
-    objects_to_delete = []
+    objects_to_delete: list[S3ObjectKey] = []
     kept_count = 0
 
     # Run S3 operations in thread pool since boto3 is synchronous
-    def list_and_classify():
+    def list_and_classify() -> None:
         nonlocal kept_count
         for obj in s3_bucket.objects.filter(Prefix=prefix):
             fname = obj.key[len(prefix) :]
@@ -173,8 +196,8 @@ async def s3_cleanup(
     deleted_count = 0
     if objects_to_delete and not dry_run:
 
-        async def delete_batch(batch):
-            def do_delete():
+        async def delete_batch(batch: list[S3ObjectKey]) -> DeletionResult:
+            def do_delete() -> DeletionResult:
                 return s3_bucket.delete_objects(Delete={"Objects": batch})
 
             return await asyncio.to_thread(do_delete)

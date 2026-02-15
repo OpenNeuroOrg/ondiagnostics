@@ -85,7 +85,7 @@ async def consumer(
         await output_queue.put(None)
 
 
-class ProgressQueue[T](asyncio.Queue):
+class ProgressQueue[T](asyncio.Queue[T]):
     """Queue that updates a progress bar as items are added and removed."""
 
     def __init__(

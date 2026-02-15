@@ -11,7 +11,7 @@ class AWSConfig:
     AWS_REGION: str
 
     @classmethod
-    def from_dict(cls, data: dict) -> AWSConfig:
+    def from_dict(cls, data: dict[str, str]) -> AWSConfig:
         return cls(
             AWS_ACCESS_KEY_ID=data["AWS_ACCESS_KEY_ID"],
             AWS_SECRET_ACCESS_KEY=data["AWS_SECRET_ACCESS_KEY"],
