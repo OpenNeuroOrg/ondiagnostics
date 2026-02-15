@@ -5,6 +5,7 @@ from collections.abc import AsyncIterable, Iterable
 from typing import TypeVar
 
 import pytest
+from rich.progress import Progress
 
 from ondiagnostics.pipeline import producer, consumer, ProgressQueue
 
@@ -203,3 +204,56 @@ async def test_consumer_processes_concurrently() -> None:
     # With concurrency, all 10 should finish in ~0.1s, not 1.0s
     total_time = asyncio.get_event_loop().time() - start_time
     assert total_time < 0.5  # Much less than 10 * 0.1 = 1.0s
+
+
+@pytest.mark.asyncio
+async def test_progress_queue_updates_put_task() -> None:
+    """Test ProgressQueue updates put_task_id on put."""
+    progress = Progress()
+    put_task = progress.add_task("Put", total=0)
+
+    queue: asyncio.Queue[int | None] = ProgressQueue(
+        progress, put_task_id=put_task, maxsize=10
+    )
+
+    await producer(as_async(range(3)), queue)
+
+    # Put task should show 3 completed
+    task = progress.tasks[put_task]
+    assert task.completed == 3
+
+
+@pytest.mark.asyncio
+async def test_progress_queue_updates_get_task_total() -> None:
+    """Test ProgressQueue updates get_task_id total on put."""
+    progress = Progress()
+    get_task = progress.add_task("Get", total=0)
+
+    queue: asyncio.Queue[int | None] = ProgressQueue(
+        progress, get_task_id=get_task, maxsize=10
+    )
+
+    await producer(as_async(range(3)), queue)
+
+    # Get task total should be 3
+    task = progress.tasks[get_task]
+    assert task.total == 3
+
+
+@pytest.mark.asyncio
+async def test_progress_queue_both_tasks() -> None:
+    """Test ProgressQueue with both put and get task IDs."""
+    progress = Progress()
+    put_task = progress.add_task("Producing", total=0)
+    get_task = progress.add_task("Consuming", total=0)
+
+    queue: asyncio.Queue[int | None] = ProgressQueue(
+        progress, put_task_id=put_task, get_task_id=get_task, maxsize=10
+    )
+
+    await producer(as_async(range(5)), queue)
+
+    # Put task should show 5, get task total should be 5
+    assert progress.tasks[put_task].completed == 5
+    assert progress.tasks[get_task].total == 5
+    assert progress.tasks[get_task].completed == 0
