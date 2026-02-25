@@ -159,6 +159,9 @@ async def s3_cleanup(
     """
     log = logger.bind(dataset=dataset.id, tag=dataset.tag)
     dataset_path = cache_dir / f"{dataset.id}.git"
+    if not dataset_path.exists():
+        log.error("Dataset not found in cache", path=dataset_path)
+        return None
 
     # Get the tree from the git repository
     repo = pygit2.Repository(dataset_path)
