@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 from enum import Enum
 from pathlib import Path
@@ -12,7 +13,7 @@ from . import logger
 from .awsconfig import AWSConfig
 from .graphql import Dataset, create_client, get_dataset_count, datasets_generator
 from .pipeline import producer, consumer, ProgressQueue
-from .tasks import Bucket, check_remote, clone_dataset, s3_cleanup
+from .tasks import check_remote, clone_dataset, s3_cleanup
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
