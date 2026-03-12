@@ -5,6 +5,8 @@ import structlog
 import pygit2
 import pytest
 
+from ondiagnostics.graphql import Dataset
+
 
 @pytest.fixture(autouse=True)
 def log_events() -> Iterator[list[MutableMapping[str, object]]]:
@@ -33,3 +35,9 @@ def git_repo_with_tag(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, s
     repo.create_reference("refs/tags/1.0.0", commit_id)
 
     return repo_path, str(repo.revparse_single("1.0.0").id)
+
+
+@pytest.fixture
+def sample_dataset() -> Dataset:
+    """Create a sample dataset for testing."""
+    return Dataset(id="ds000001", tag="1.0.0", hexsha="abc123def456")

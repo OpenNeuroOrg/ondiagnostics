@@ -11,12 +11,6 @@ from ondiagnostics.subprocs import SubprocessResult
 from ondiagnostics.tasks.git import check_remote, clone_dataset
 
 
-@pytest.fixture
-def sample_dataset() -> Dataset:
-    """Create a sample dataset for testing."""
-    return Dataset(id="ds000001", tag="1.0.0", hexsha="abc123def456")
-
-
 # Tests for check_remote()
 
 
