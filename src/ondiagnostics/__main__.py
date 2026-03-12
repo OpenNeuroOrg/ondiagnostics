@@ -4,7 +4,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
-import boto3
 import structlog
 from rich.progress import Progress, TextColumn, BarColumn, MofNCompleteColumn
 from typer import Typer, Option
@@ -19,7 +18,6 @@ from .tasks.s3 import plan_cleanup, execute_cleanup
 TYPE_CHECKING = False
 if TYPE_CHECKING:
     from typing import AsyncIterator, Awaitable, Callable, Protocol, TypeVar
-    from .tasks.s3 import Bucket
 
     class HasId(Protocol):
         """Protocol for objects with an ID."""
@@ -101,15 +99,15 @@ def add_consumer(
 
 async def run_pipeline(
     cache_dir: Path | None = None,
-    bucket: Bucket | None = None,
+    aws_config: AWSConfig | None = None,
     dry_run: bool = False,
 ) -> int:
     """
     Run the OpenNeuro dataset validation pipeline.
 
     Args:
-        aws_config: AWS configuration for S3 access
         cache_dir: Directory to cache cloned repositories
+        aws_config: AWS configuration for S3 access
         dry_run: If True, don't actually delete S3 files
 
     Returns:
@@ -134,19 +132,23 @@ async def run_pipeline(
         )
         queue = add_consumer("Checking", check_remote, queue, 20)
 
-        if bucket and cache_dir:
+        if aws_config and cache_dir:
+            # Create aioboto3 session for S3 operations
+            session = aws_config.create_session()
+            bucket_name = aws_config.AWS_S3_BUCKET_NAME
+
             queue = add_consumer(
                 "Cloning", lambda d: clone_dataset(d, cache_dir), queue, 10
             )
             queue = add_consumer(
                 "Checking S3",
-                lambda d: plan_cleanup(d, cache_dir, bucket),
+                lambda d: plan_cleanup(d, cache_dir, session, bucket_name),
                 queue,
                 10,
             )
             queue = add_consumer(
                 "Cleaning S3",
-                lambda plan: execute_cleanup(plan, bucket, dry_run),
+                lambda plan: execute_cleanup(plan, session, bucket_name, dry_run),
                 queue,
                 5,
             )
@@ -189,23 +191,19 @@ def clean_s3(
     #     list[str] | None, Argument(help="Optional list of dataset IDs")
     # ] = None,
 ) -> int:
+    """
+    Clean up S3 files that don't match the latest git tag.
+    """
     structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(log_level))
     logger.debug("Starting clean-s3", dry_run=dry_run, log_level=log_level.value)
 
     aws_config = AWSConfig.from_file(config) if config else AWSConfig.from_env()
 
-    s3 = boto3.resource(
-        "s3",
-        region_name=aws_config.AWS_REGION,
-        aws_access_key_id=aws_config.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=aws_config.AWS_SECRET_ACCESS_KEY,
-    )
-    s3_bucket: Bucket = s3.Bucket(aws_config.AWS_S3_BUCKET_NAME)
     try:
         return asyncio.run(
             run_pipeline(
                 cache_dir=Path.home() / ".cache" / "ondiagnostics",
-                bucket=s3_bucket,
+                aws_config=aws_config,
                 dry_run=dry_run,
             )
         )

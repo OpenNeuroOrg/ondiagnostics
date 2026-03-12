@@ -2,6 +2,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+import aioboto3
+
 
 @dataclass
 class AWSConfig:
@@ -37,3 +39,11 @@ class AWSConfig:
             return cls.from_dict(config_data["secrets"]["aws"])
         except KeyError:
             raise ValueError("AWS credentials are missing in the config file.")
+
+    def create_session(self) -> aioboto3.Session:
+        """Create an aioboto3 Session with configured credentials."""
+        return aioboto3.Session(
+            aws_access_key_id=self.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=self.AWS_SECRET_ACCESS_KEY,
+            region_name=self.AWS_REGION,
+        )
