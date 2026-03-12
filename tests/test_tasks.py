@@ -4,10 +4,9 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import pygit2
 
 from ondiagnostics.graphql import Dataset
-from ondiagnostics.tasks import git, check_remote, clone_dataset
+from ondiagnostics.tasks import check_remote, clone_dataset
 
 
 @pytest.fixture
@@ -24,63 +23,6 @@ def mock_s3_bucket() -> MagicMock:
     bucket.objects = MagicMock()
     bucket.delete_objects = MagicMock(return_value={"Deleted": []})
     return bucket
-
-
-@pytest.fixture(scope="session")
-def git_repo_with_tag(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, str]:
-    """Create a real git repository with a tag (session-scoped)."""
-    repo_path = tmp_path_factory.mktemp("repos") / "test_repo.git"
-    repo_path.mkdir()
-
-    # Initialize bare repo
-    repo = pygit2.init_repository(str(repo_path), bare=True)
-
-    # Create a commit
-    tree_id = repo.TreeBuilder().write()
-    author = pygit2.Signature("Test User", "test@example.com")
-    commit_id = repo.create_commit(
-        "refs/heads/main", author, author, "Initial commit", tree_id, []
-    )
-
-    # Create a tag
-    repo.create_reference("refs/tags/1.0.0", commit_id)
-
-    return repo_path, str(repo.revparse_single("1.0.0").id)
-
-
-@pytest.mark.asyncio
-async def test_git_success(git_repo_with_tag: tuple[Path, str]) -> None:
-    """Test git command execution with successful result."""
-    repo_path, commit_sha = git_repo_with_tag
-
-    ret, stdout, stderr = await git("ls-remote", str(repo_path))
-
-    refs = ["HEAD", "refs/heads/main", "refs/tags/1.0.0"]
-    expected_output = "".join(f"{commit_sha}\t{ref}\n" for ref in refs).encode()
-    assert ret == 0
-    assert stdout == expected_output
-    assert stderr == b""
-
-
-@pytest.mark.asyncio
-async def test_git_failure() -> None:
-    """Test git command execution with failure."""
-    # Use a command that will fail
-    ret, stdout, stderr = await git("ls-remote", "/nonexistent/repo.git")
-
-    assert ret != 0
-    assert stderr != b""
-
-
-@pytest.mark.asyncio
-async def test_git_multiple_args(git_repo_with_tag: tuple[Path, str]) -> None:
-    """Test git command with multiple arguments."""
-    repo_path, commit_sha = git_repo_with_tag
-
-    ret, stdout, stderr = await git("ls-remote", "--exit-code", str(repo_path), "1.0.0")
-
-    assert ret == 0
-    assert stdout == f"{commit_sha}\trefs/tags/1.0.0\n".encode()
 
 
 # Tests for check_remote()

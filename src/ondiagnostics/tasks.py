@@ -7,6 +7,7 @@ import pygit2
 
 from . import logger
 from .graphql import Dataset
+from .subprocs import git
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -36,19 +37,6 @@ if TYPE_CHECKING:
         def delete_objects(self, Delete: S3DeleteRequest) -> DeletionResult: ...
 
 
-async def git(*args: str) -> tuple[int, bytes, bytes]:
-    """Run a git command and return the exit code, stdout, and stderr."""
-    proc = await asyncio.create_subprocess_exec(
-        "git",
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
-    assert proc.returncode is not None
-    return proc.returncode, stdout, stderr
-
-
 def worker_from_id(dataset_id: str) -> int:
     """Generate a worker number from the dataset ID."""
     # Use SHA-1 hash to get a consistent integer from the dataset ID
@@ -68,20 +56,20 @@ async def check_remote(dataset: Dataset) -> Dataset | None:
     )
     repo = f"https://github.com/OpenNeuroDatasets/{dataset.id}.git"
 
-    ret, stdout, stderr = await git("ls-remote", "--exit-code", repo, dataset.tag)
+    result = await git("ls-remote", "--exit-code", repo, dataset.tag)
 
-    if ret:
-        if b"Repository not found" in stderr:
+    if result.returncode:
+        if b"Repository not found" in result.stderr:
             log.error("Missing repository")
         else:
             log.error("Missing latest tag")
         return None
 
-    if not stdout.strip():
+    if not result.stdout.strip():
         log.error("Empty response from git ls-remote")
         return None
 
-    stdout_text = stdout.decode().strip()
+    stdout_text = result.stdout.decode().strip()
 
     shasum, ref = stdout_text.split(maxsplit=1)
 
@@ -118,7 +106,7 @@ async def clone_dataset(dataset: Dataset, cache_dir: Path) -> Dataset | None:
             log.debug("Existing dataset already has the tag, assume clean")
             return dataset
         log.debug("Updating existing dataset")
-        ret, _, stderr = await git(
+        result = await git(
             "-C",
             str(dataset_path),
             "fetch",
@@ -126,14 +114,13 @@ async def clone_dataset(dataset: Dataset, cache_dir: Path) -> Dataset | None:
             dataset.tag,
         )
 
-        if ret != 0:
-            error_msg = stderr.decode()
-            log.error("Failed to fetch", stderr=error_msg)
+        if result.returncode != 0:
+            log.error("Failed to fetch", stderr=result.stderr.decode())
             return None
     else:
         log.debug("Cloning dataset")
         cache_dir.mkdir(parents=True, exist_ok=True)
-        ret, stdout, stderr = await git(
+        result = await git(
             "clone",
             "--bare",
             "--filter=blob:none",
@@ -144,9 +131,8 @@ async def clone_dataset(dataset: Dataset, cache_dir: Path) -> Dataset | None:
             str(dataset_path),
         )
 
-        if ret != 0:
-            error_msg = stderr.decode()
-            log.error("Failed to clone", stderr=error_msg)
+        if result.returncode != 0:
+            log.error("Failed to clone", stderr=result.stderr.decode())
             return None
 
     return dataset
