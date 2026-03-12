@@ -29,6 +29,7 @@ async def test_producer_base() -> None:
         value += 1
 
     assert item is None
+    assert value == 5
 
 
 @pytest.mark.asyncio
@@ -41,7 +42,7 @@ async def test_producer_with_callback() -> None:
 
     queue: asyncio.Queue[int | None] = asyncio.Queue()
     await producer(as_async(range(5)), queue, on_complete=callback)
-    while (item := await queue.get()) is not None:
+    while await queue.get() is not None:
         pass
 
     assert values == [0, 1, 2, 3, 4]
