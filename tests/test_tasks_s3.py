@@ -7,7 +7,7 @@ import aioboto3
 
 from aiomoto import mock_aws
 from ondiagnostics.graphql import Dataset
-from ondiagnostics.tasks.s3 import plan_cleanup
+from ondiagnostics.tasks.s3 import plan_cleanup, execute_cleanup, S3CleanupPlan
 
 pytestmark = pytest.mark.asyncio
 
@@ -194,8 +194,129 @@ async def test_plan_cleanup_ignores_wrong_prefix(
         },
     )
 
-    plan = await plan_cleanup(test_dataset, git_repo_simple, session, bucket_name)
+    plan = await plan_cleanup(sample_dataset, git_repo_simple, session, bucket_name)
 
     assert plan is not None
     assert len(plan.files_to_delete) == 1
     assert f"{prefix}orphaned.txt" in plan.files_to_delete
+
+
+# ============================================================================
+# execute_cleanup() tests
+# ============================================================================
+
+
+async def test_execute_cleanup_deletes_files(mock_session, sample_dataset):
+    """Should delete all files in the plan."""
+    session, bucket_name = mock_session
+    prefix = f"{sample_dataset.id}/"
+
+    # Create files in S3
+    files_to_delete = [f"{prefix}file{i}.txt" for i in range(5)]
+    await populate_bucket(
+        *mock_session,
+        {key: b"content" for key in files_to_delete},
+    )
+
+    plan = S3CleanupPlan(dataset=sample_dataset, files_to_delete=files_to_delete)
+    result = await execute_cleanup(plan, session, bucket_name, dry_run=False)
+
+    assert result == sample_dataset
+
+    # Verify files were deleted
+    async with session.client("s3", region_name="us-east-1") as s3:
+        response = await s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+        assert "Contents" not in response
+
+
+async def test_execute_cleanup_dry_run_does_not_delete(mock_session, sample_dataset):
+    """Dry run should not actually delete files."""
+    session, bucket_name = mock_session
+    prefix = f"{sample_dataset.id}/"
+
+    files_to_delete = [f"{prefix}file{i}.txt" for i in range(3)]
+    await populate_bucket(
+        *mock_session,
+        {key: b"content" for key in files_to_delete},
+    )
+
+    plan = S3CleanupPlan(dataset=sample_dataset, files_to_delete=files_to_delete)
+    result = await execute_cleanup(plan, session, bucket_name, dry_run=True)
+
+    assert result == sample_dataset
+
+    # Verify files still exist
+    async with session.client("s3", region_name="us-east-1") as s3:
+        response = await s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+        assert "Contents" in response
+        assert len(response["Contents"]) == 3
+
+
+@pytest.mark.parametrize("file_count", [999, 1000, 1001, 2500])
+async def test_execute_cleanup_multichunk(mock_session, sample_dataset, file_count):
+    """Handles files near and significantly above the 1000-file batch limit."""
+    session, bucket_name = mock_session
+    prefix = f"{sample_dataset.id}/"
+
+    files_to_delete = [f"{prefix}file{i:04d}.txt" for i in range(file_count)]
+
+    # Don't actually create them in S3 (would be slow)
+    # S3 delete_objects doesn't error on non-existent keys
+    plan = S3CleanupPlan(dataset=sample_dataset, files_to_delete=files_to_delete)
+    result = await execute_cleanup(plan, session, bucket_name, dry_run=False)
+
+    assert result == sample_dataset
+
+
+# ============================================================================
+# Integration tests
+# ============================================================================
+
+
+async def test_full_cleanup_pipeline(mock_session, sample_dataset, git_repo_simple):
+    """Test complete flow: plan -> execute."""
+    session, bucket_name = mock_session
+    prefix = f"{sample_dataset.id}/"
+
+    # Set up S3 with mix of valid and orphaned files
+    await populate_bucket(
+        *mock_session,
+        {
+            # Files in git
+            f"{prefix}file1.txt": b"content",
+            f"{prefix}file2.txt": b"content",
+            # Orphaned files
+            f"{prefix}old1.txt": b"old",
+            f"{prefix}old2.txt": b"old",
+        },
+    )
+
+    # Plan cleanup
+    plan = await plan_cleanup(sample_dataset, git_repo_simple, session, bucket_name)
+
+    assert plan is not None
+    assert len(plan.files_to_delete) == 2
+
+    # Execute cleanup
+    result = await execute_cleanup(plan, session, bucket_name, dry_run=False)
+
+    assert result == sample_dataset
+
+    # Verify only orphaned files were deleted
+    async with session.client("s3", region_name="us-east-1") as s3:
+        response = await s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+
+    remaining_keys = [obj["Key"] for obj in response.get("Contents", [])]
+    assert f"{prefix}file1.txt" in remaining_keys
+    assert f"{prefix}file2.txt" in remaining_keys
+    assert f"{prefix}old1.txt" not in remaining_keys
+    assert f"{prefix}old2.txt" not in remaining_keys
+
+
+def test_s3_cleanup_plan_id_property(sample_dataset):
+    """Smoke test: S3CleanupPlan.id should return dataset.id."""
+    plan = S3CleanupPlan(
+        dataset=sample_dataset, files_to_delete=["file1.txt", "file2.txt"]
+    )
+
+    assert plan.id == sample_dataset.id
