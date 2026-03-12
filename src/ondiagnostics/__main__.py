@@ -14,7 +14,7 @@ from .awsconfig import AWSConfig
 from .graphql import Dataset, create_client, get_dataset_count, datasets_generator
 from .pipeline import producer, consumer, ProgressQueue
 from .tasks.git import check_remote, clone_dataset
-from .tasks.s3 import s3_cleanup
+from .tasks.s3 import plan_cleanup, execute_cleanup
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -139,10 +139,16 @@ async def run_pipeline(
                 "Cloning", lambda d: clone_dataset(d, cache_dir), queue, 10
             )
             queue = add_consumer(
-                "Cleaning S3",
-                lambda d: s3_cleanup(d, cache_dir, bucket, dry_run),
+                "Checking S3",
+                lambda d: plan_cleanup(d, cache_dir, bucket),
                 queue,
                 10,
+            )
+            queue = add_consumer(
+                "Cleaning S3",
+                lambda plan: execute_cleanup(plan, bucket, dry_run),
+                queue,
+                5,
             )
 
         while await queue.get() is not None:

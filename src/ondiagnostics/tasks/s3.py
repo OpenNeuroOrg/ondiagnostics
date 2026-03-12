@@ -1,6 +1,10 @@
-"""Asyncio tasks for dataset diagnostics."""
+"""S3 tasks for dataset diagnostics."""
+
+from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
+from pathlib import Path
 
 import pygit2
 
@@ -9,7 +13,6 @@ from ..graphql import Dataset
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from pathlib import Path
     from collections.abc import Iterable
     from typing import Protocol, TypedDict
 
@@ -35,92 +38,131 @@ if TYPE_CHECKING:
         def delete_objects(self, Delete: S3DeleteRequest) -> DeletionResult: ...
 
 
-async def s3_cleanup(
-    dataset: Dataset, cache_dir: Path, s3_bucket: Bucket, dry_run: bool = False
-) -> Dataset | None:
+@dataclass
+class S3CleanupPlan:
+    """Plan for S3 cleanup - carries both dataset and cleanup info."""
+
+    dataset: Dataset
+    files_to_delete: list[str]
+
+    @property
+    def id(self) -> str:
+        return self.dataset.id
+
+
+async def plan_cleanup(
+    dataset: Dataset,
+    cache_dir: Path,
+    s3_bucket: Bucket,
+) -> S3CleanupPlan | None:
     """
-    Clean up S3 files not in the repository tag.
+    Plan which S3 files should be deleted (worker for pipeline).
 
     Args:
         dataset: Dataset to clean up
         cache_dir: Directory containing cloned repositories
-        s3_bucket: boto3 Bucket resource
-        dry_run: If True, don't actually delete files
+        s3_bucket: S3 bucket to check
+
+    Returns:
+        Cleanup plan, or None on failure
+    """
+    log = logger.bind(dataset=dataset.id, tag=dataset.tag)
+    dataset_path = cache_dir / f"{dataset.id}.git"
+
+    # Get the tree from the git repository
+    try:
+        repo = pygit2.Repository(dataset_path)
+        tag_ref = repo.references.get(f"refs/tags/{dataset.tag}")
+        if not tag_ref:
+            log.error("Tag not found in dataset", tag=dataset.tag)
+            return None
+
+        tree = tag_ref.peel().tree
+    except Exception as e:
+        log.error("Failed to read repository", exc_info=e)
+        return None
+
+    prefix = f"{dataset.id}/"
+
+    # Get list of S3 objects
+    def list_objects() -> list[str]:
+        return [obj.key for obj in s3_bucket.objects.filter(Prefix=prefix)]
+
+    s3_keys = await asyncio.to_thread(list_objects)
+
+    # Determine what to delete
+    files_to_delete = []
+
+    for key in s3_keys:
+        if not key.startswith(prefix):
+            continue
+
+        fname = key[len(prefix) :]
+        if fname and fname not in tree:
+            files_to_delete.append(key)
+            log.debug("Will delete", filename=fname)
+
+    if not files_to_delete:
+        log.debug("No files to delete")
+        return None
+
+    return S3CleanupPlan(
+        dataset=dataset,
+        files_to_delete=files_to_delete,
+    )
+
+
+async def execute_cleanup(
+    plan: S3CleanupPlan,
+    s3_bucket: Bucket,
+    dry_run: bool = False,
+) -> Dataset | None:
+    """
+    Execute an S3 cleanup plan (worker for pipeline).
+
+    Args:
+        plan: Cleanup plan to execute
+        s3_bucket: S3 bucket to delete from
+        dry_run: If True, don't actually delete
 
     Returns:
         The dataset if successful, None on failure
     """
-    log = logger.bind(dataset=dataset.id, tag=dataset.tag)
-    dataset_path = cache_dir / f"{dataset.id}.git"
-    if not dataset_path.exists():
-        log.error("Dataset not found in cache", path=dataset_path)
-        return None
+    log = logger.bind(dataset=plan.dataset.id, tag=plan.dataset.tag, dry_run=dry_run)
 
-    # Get the tree from the git repository
-    repo = pygit2.Repository(dataset_path)
-    tag_ref = repo.references.get(f"refs/tags/{dataset.tag}")
-    if not tag_ref:
-        log.error("Tag not found in dataset", tag=dataset.tag)
-        return None
-
-    tree = tag_ref.peel().tree
-    prefix = f"{dataset.id}/"
-
-    # log.info("Checking S3 bucket", bucket=s3_bucket.name, prefix=prefix)
-
-    # Collect objects to delete (don't delete in the iteration loop)
-    objects_to_delete: list[S3ObjectKey] = []
-    kept_count = 0
-
-    # Run S3 operations in thread pool since boto3 is synchronous
-    def list_and_classify() -> None:
-        nonlocal kept_count
-        for obj in s3_bucket.objects.filter(Prefix=prefix):
-            fname = obj.key[len(prefix) :]
-            if fname and fname not in tree:
-                objects_to_delete.append({"Key": obj.key})
-                log.debug("Will delete", filename=fname)
+    # Batch delete
+    async def delete_batch(keys: list[str]) -> int:
+        def do_delete() -> int:
+            objects: list[S3ObjectKey] = [{"Key": key} for key in keys]
+            if not dry_run:
+                result = s3_bucket.delete_objects(Delete={"Objects": objects})
+                deleted = result.get("Deleted", [])
             else:
-                kept_count += 1
+                deleted = objects
+            for obj in deleted:
+                log.info("Deleted", key=obj["Key"])
+            return len(deleted)
 
-    await asyncio.to_thread(list_and_classify)
+        return await asyncio.to_thread(do_delete)
 
-    # Batch delete objects (S3 supports up to 1000 objects per request)
-    deleted_count = 0
-    if objects_to_delete and not dry_run:
+    # Process in batches of 1000
+    batch_size = 1000
+    delete_tasks = []
+    for i in range(0, len(plan.files_to_delete), batch_size):
+        batch = plan.files_to_delete[i : i + batch_size]
+        delete_tasks.append(delete_batch(batch))
 
-        async def delete_batch(batch: list[S3ObjectKey]) -> DeletionResult:
-            def do_delete() -> DeletionResult:
-                return s3_bucket.delete_objects(Delete={"Objects": batch})
-
-            return await asyncio.to_thread(do_delete)
-
-        # Process in batches of 1000
-        batch_size = 1000
-        delete_tasks = []
-        for i in range(0, len(objects_to_delete), batch_size):
-            batch = objects_to_delete[i : i + batch_size]
-            delete_tasks.append(delete_batch(batch))
-
-        # Run all delete batches concurrently
+    # Run all delete batches concurrently
+    try:
         results = await asyncio.gather(*delete_tasks)
+        deleted_count = sum(results)
 
-        # Count successful deletions
-        for result in results:
-            if "Deleted" in result:
-                deleted_count += len(result["Deleted"])
-                for deleted in result["Deleted"]:
-                    log.info("Deleted", key=deleted["Key"])
-    else:
-        deleted_count = len(objects_to_delete)
-
-    if deleted_count:
         log.info(
             "S3 cleanup complete",
             deleted=deleted_count,
-            kept=kept_count,
-            dry_run=dry_run,
         )
-    else:
-        log.debug("Clean dataset", kept=kept_count)
-    return dataset
+
+        return plan.dataset
+    except Exception as e:
+        log.error("Failed to execute S3 cleanup", exc_info=e)
+        return None
