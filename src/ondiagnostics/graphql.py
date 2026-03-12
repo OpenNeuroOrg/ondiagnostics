@@ -59,8 +59,13 @@ class GraphQLResponse:
     datasets: DatasetsResponse
 
 
+@dataclass
+class SingleDatasetResponse:
+    dataset: DatasetNode | None
+
+
 ENDPOINT = "https://openneuro.org/crn/graphql"
-QUERY: gql.GraphQLRequest = gql.gql("""
+GET_DATASETS: gql.GraphQLRequest = gql.gql("""
 query DatasetsWithLatestSnapshots($count: Int, $after: String) {
   datasets(
     first: $count,
@@ -86,6 +91,18 @@ query DatasetsWithLatestSnapshots($count: Int, $after: String) {
   }
 }
 """)
+GET_SINGLE_DATASET: gql.GraphQLRequest = gql.gql("""
+query GetDataset($id: ID!) {
+  dataset(id: $id) {
+    id
+    latestSnapshot {
+      tag
+      created
+      hexsha
+    }
+  }
+}
+""")
 
 
 def create_client() -> gql.Client:
@@ -98,7 +115,7 @@ async def get_page(
 ) -> GraphQLResponse:
     """Fetch a page of datasets from the GraphQL API."""
     result = await client.execute_async(
-        QUERY, variable_values={"count": count, "after": after}
+        GET_DATASETS, variable_values={"count": count, "after": after}
     )
     return converter.structure(result, GraphQLResponse)
 
@@ -146,3 +163,58 @@ async def datasets_generator(client: gql.Client) -> AsyncIterator[Dataset]:
                 tag=edge.node.latestSnapshot.tag,
                 hexsha=edge.node.latestSnapshot.hexsha,
             )
+
+
+@stamina.retry(on=httpx.HTTPError)
+async def get_dataset(client: gql.Client, dataset_id: str) -> Dataset | None:
+    """
+    Fetch a single dataset by ID from the GraphQL API.
+
+    Args:
+        client: GraphQL client
+        dataset_id: Dataset ID to fetch
+
+    Returns:
+        Dataset object or None if not found
+    """
+    try:
+        result = await client.execute_async(
+            GET_SINGLE_DATASET, variable_values={"id": dataset_id}
+        )
+    except TransportQueryError:
+        return None
+
+    response = converter.structure(result, SingleDatasetResponse)
+
+    if response.dataset is None:
+        return None
+
+    return Dataset(
+        id=response.dataset.id,
+        tag=response.dataset.latestSnapshot.tag,
+        hexsha=response.dataset.latestSnapshot.hexsha,
+    )
+
+
+async def datasets_by_ids_generator(
+    client: gql.Client, dataset_ids: list[str]
+) -> AsyncIterator[Dataset]:
+    """
+    Async generator that yields specific datasets by ID.
+
+    Args:
+        client: GraphQL client
+        dataset_ids: List of dataset IDs to fetch
+
+    Yields:
+        Dataset objects (skips datasets that don't exist)
+    """
+    for dataset_id in dataset_ids:
+        dataset = await get_dataset(client, dataset_id)
+        if dataset is None:
+            import structlog
+
+            logger = structlog.get_logger()
+            logger.error("Dataset not found or has no snapshots", dataset_id=dataset_id)
+        else:
+            yield dataset

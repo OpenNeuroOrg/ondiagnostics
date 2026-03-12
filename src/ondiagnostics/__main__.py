@@ -6,11 +6,17 @@ from typing import Annotated
 
 import structlog
 from rich.progress import Progress, TextColumn, BarColumn, MofNCompleteColumn
-from typer import Typer, Option
+from typer import Typer, Argument, Option
 
 from . import logger
 from .awsconfig import AWSConfig
-from .graphql import Dataset, create_client, get_dataset_count, datasets_generator
+from .graphql import (
+    Dataset,
+    create_client,
+    get_dataset_count,
+    datasets_generator,
+    datasets_by_ids_generator,
+)
 from .pipeline import producer, consumer, ProgressQueue
 from .tasks.git import check_remote, clone_dataset
 from .tasks.s3 import plan_cleanup, execute_cleanup
@@ -101,6 +107,7 @@ async def run_pipeline(
     cache_dir: Path | None = None,
     aws_config: AWSConfig | None = None,
     dry_run: bool = False,
+    dataset_ids: list[str] | None = None,
 ) -> int:
     """
     Run the OpenNeuro dataset validation pipeline.
@@ -116,9 +123,14 @@ async def run_pipeline(
     # Create GraphQL client
     client = create_client()
 
-    # Get total dataset count for progress tracking
-    total = await get_dataset_count(client)
-    logger.debug("Total datasets", count=total)
+    if dataset_ids:
+        total = len(dataset_ids)
+        dataset_source = datasets_by_ids_generator(client, dataset_ids)
+        logger.debug("Using dataset IDs from command line", count=total)
+    else:
+        total = await get_dataset_count(client)
+        dataset_source = datasets_generator(client)
+        logger.debug("Processing all datasets", count=total)
 
     with Progress(
         TextColumn(
@@ -128,7 +140,7 @@ async def run_pipeline(
         MofNCompleteColumn(),
     ) as progress:
         queue: DatasetQueue = add_producer(
-            "Fetching", datasets_generator(client), progress, total=total
+            "Fetching", dataset_source, progress, total=total
         )
         queue = add_consumer("Checking", check_remote, queue, 20)
 
@@ -163,6 +175,9 @@ async def run_pipeline(
 def check_sync(
     dry_run: Annotated[bool, Option(help="Run without making changes")] = False,
     log_level: Annotated[LogLevel, Option(help="Set logging level")] = LogLevel.INFO,
+    dataset_ids: Annotated[
+        list[str] | None, Argument(help="Optional list of dataset IDs")
+    ] = None,
 ) -> int:
     """
     Check synchronization status.
@@ -171,7 +186,7 @@ def check_sync(
     logger.debug("Starting check-sync", dry_run=dry_run, log_level=log_level.value)
     # Run the async pipeline
     try:
-        return asyncio.run(run_pipeline())
+        return asyncio.run(run_pipeline(dataset_ids=dataset_ids))
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
         return 130
@@ -185,11 +200,9 @@ def clean_s3(
     config: Annotated[Path | None, Option(help="Path to configuration file")] = None,
     dry_run: Annotated[bool, Option(help="Run without making changes")] = False,
     log_level: Annotated[LogLevel, Option(help="Set logging level")] = LogLevel.INFO,
-    ## Would be good to add, but we will need a new GraphQL query to restrict ourselves
-    ## to specific datasets
-    # dataset_ids: Annotated[
-    #     list[str] | None, Argument(help="Optional list of dataset IDs")
-    # ] = None,
+    dataset_ids: Annotated[
+        list[str] | None, Argument(help="Optional list of dataset IDs")
+    ] = None,
 ) -> int:
     """
     Clean up S3 files that don't match the latest git tag.
@@ -205,6 +218,7 @@ def clean_s3(
                 cache_dir=Path.home() / ".cache" / "ondiagnostics",
                 aws_config=aws_config,
                 dry_run=dry_run,
+                dataset_ids=dataset_ids,
             )
         )
     except KeyboardInterrupt:
