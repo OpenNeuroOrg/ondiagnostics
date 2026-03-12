@@ -4,8 +4,8 @@ import asyncio
 
 import pygit2
 
-from . import logger
-from .graphql import Dataset
+from .. import logger
+from ..graphql import Dataset
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:

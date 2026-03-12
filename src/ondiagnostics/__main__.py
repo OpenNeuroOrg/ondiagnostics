@@ -14,7 +14,7 @@ from .awsconfig import AWSConfig
 from .graphql import Dataset, create_client, get_dataset_count, datasets_generator
 from .pipeline import producer, consumer, ProgressQueue
 from .tasks.git import check_remote, clone_dataset
-from .tasks import s3_cleanup
+from .tasks.s3 import s3_cleanup
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
