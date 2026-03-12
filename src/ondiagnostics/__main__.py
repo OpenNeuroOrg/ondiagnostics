@@ -19,6 +19,7 @@ from .tasks.s3 import s3_cleanup
 TYPE_CHECKING = False
 if TYPE_CHECKING:
     from typing import AsyncIterator, Awaitable, Callable, TypeVar
+    from .tasks.s3 import Bucket
 
     T = TypeVar("T")
     R = TypeVar("R")
