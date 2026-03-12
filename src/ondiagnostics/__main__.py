@@ -18,11 +18,19 @@ from .tasks.s3 import s3_cleanup
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from typing import AsyncIterator, Awaitable, Callable, TypeVar
+    from typing import AsyncIterator, Awaitable, Callable, Protocol, TypeVar
     from .tasks.s3 import Bucket
 
-    T = TypeVar("T")
-    R = TypeVar("R")
+    class HasId(Protocol):
+        """Protocol for objects with an ID."""
+
+        @property
+        def id(self) -> str: ...
+
+    T = TypeVar("T", bound=HasId)
+    T_co = TypeVar("T_co", bound=HasId, covariant=True)
+    R = TypeVar("R", bound=HasId)
+
 
 app: Typer = Typer()
 
@@ -34,7 +42,7 @@ class LogLevel(str, Enum):
     ERROR = "error"
 
 
-type DatasetQueue = ProgressQueue[Dataset | None]
+type DatasetQueue[T_co] = ProgressQueue[T_co | None]
 
 
 def add_producer(
@@ -43,10 +51,10 @@ def add_producer(
     progress: Progress,
     total: int,
     maxsize: int = 200,
-) -> DatasetQueue:
+) -> ProgressQueue[Dataset | None]:
     """Create a producer that feeds datasets from an async generator into a ProgressQueue."""
     task_id = progress.add_task(name, total=total, dataset="...")
-    out_queue: DatasetQueue = ProgressQueue(
+    out_queue: ProgressQueue[Dataset | None] = ProgressQueue(
         progress=progress, put_task_id=task_id, maxsize=maxsize
     )
 
@@ -62,16 +70,16 @@ def add_producer(
 
 def add_consumer(
     name: str,
-    func: Callable[[Dataset], Awaitable[Dataset | None]],
-    input_queue: DatasetQueue,
+    func: Callable[[T], Awaitable[R | None]],
+    input_queue: ProgressQueue[T | None],
     max_concurrent: int,
-) -> DatasetQueue:
+) -> ProgressQueue[R | None]:
     """Create a consumer that processes datasets from an input queue and routes successful results to an output queue."""
     progress = input_queue.progress
     task_id = progress.add_task(name, total=0, dataset="...")
     input_queue.get_task_id = task_id
 
-    out_queue: DatasetQueue = ProgressQueue(
+    out_queue: ProgressQueue[R | None] = ProgressQueue(
         progress=progress,
         maxsize=max_concurrent * 10,
     )
@@ -121,7 +129,7 @@ async def run_pipeline(
         BarColumn(),
         MofNCompleteColumn(),
     ) as progress:
-        queue = add_producer(
+        queue: DatasetQueue = add_producer(
             "Fetching", datasets_generator(client), progress, total=total
         )
         queue = add_consumer("Checking", check_remote, queue, 20)
