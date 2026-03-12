@@ -1,6 +1,7 @@
 """Asyncio tasks for dataset diagnostics."""
 
 import asyncio
+from hashlib import sha1
 
 import pygit2
 
@@ -48,6 +49,13 @@ async def git(*args: str) -> tuple[int, bytes, bytes]:
     return proc.returncode, stdout, stderr
 
 
+def worker_from_id(dataset_id: str) -> int:
+    """Generate a worker number from the dataset ID."""
+    # Use SHA-1 hash to get a consistent integer from the dataset ID
+    hash_bytes = sha1(dataset_id.encode()).digest()
+    return hash_bytes[-1] % 4
+
+
 async def check_remote(dataset: Dataset) -> Dataset | None:
     """
     Check if the git remote has the expected tag and commit hash.
@@ -55,7 +63,9 @@ async def check_remote(dataset: Dataset) -> Dataset | None:
     Returns:
         The dataset if valid, None if validation fails
     """
-    log = logger.bind(dataset=dataset.id, tag=dataset.tag)
+    log = logger.bind(
+        dataset=dataset.id, tag=dataset.tag, worker=worker_from_id(dataset.id)
+    )
     repo = f"https://github.com/OpenNeuroDatasets/{dataset.id}.git"
 
     ret, stdout, stderr = await git("ls-remote", "--exit-code", repo, dataset.tag)
