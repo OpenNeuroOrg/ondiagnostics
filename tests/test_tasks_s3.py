@@ -9,8 +9,6 @@ from aiomoto import mock_aws
 from ondiagnostics.graphql import Dataset
 from ondiagnostics.tasks.s3 import plan_cleanup, execute_cleanup, S3CleanupPlan
 
-pytestmark = pytest.mark.asyncio
-
 
 @pytest.fixture
 def git_repo_simple(tmp_path, sample_dataset):
@@ -66,6 +64,7 @@ async def populate_bucket(
 # ============================================================================
 
 
+@pytest.mark.asyncio
 async def test_plan_cleanup_identifies_orphaned_files(
     mock_session, sample_dataset, git_repo_simple
 ):
@@ -99,6 +98,7 @@ async def test_plan_cleanup_identifies_orphaned_files(
     assert f"{prefix}file2.txt" not in plan.files_to_delete
 
 
+@pytest.mark.asyncio
 async def test_plan_cleanup_returns_none_when_no_orphans(
     mock_session, sample_dataset, git_repo_simple
 ):
@@ -120,6 +120,7 @@ async def test_plan_cleanup_returns_none_when_no_orphans(
     assert plan is None
 
 
+@pytest.mark.asyncio
 async def test_plan_cleanup_returns_none_when_s3_empty(
     mock_session, sample_dataset, git_repo_simple
 ):
@@ -131,6 +132,7 @@ async def test_plan_cleanup_returns_none_when_s3_empty(
     assert plan is None
 
 
+@pytest.mark.asyncio
 async def test_plan_cleanup_handles_missing_tag(
     mock_session, sample_dataset, git_repo_simple
 ):
@@ -145,6 +147,7 @@ async def test_plan_cleanup_handles_missing_tag(
     assert plan is None
 
 
+@pytest.mark.asyncio
 async def test_plan_cleanup_handles_missing_repo(
     mock_session, sample_dataset, tmp_path
 ):
@@ -157,6 +160,7 @@ async def test_plan_cleanup_handles_missing_repo(
     assert plan is None
 
 
+@pytest.mark.asyncio
 async def test_plan_cleanup_processes_multiple_pages(
     mock_session, sample_dataset, git_repo_simple
 ):
@@ -176,6 +180,7 @@ async def test_plan_cleanup_processes_multiple_pages(
     assert len(plan.files_to_delete) == 150
 
 
+@pytest.mark.asyncio
 async def test_plan_cleanup_ignores_wrong_prefix(
     mock_session, sample_dataset, git_repo_simple
 ):
@@ -206,6 +211,7 @@ async def test_plan_cleanup_ignores_wrong_prefix(
 # ============================================================================
 
 
+@pytest.mark.asyncio
 async def test_execute_cleanup_deletes_files(mock_session, sample_dataset):
     """Should delete all files in the plan."""
     session, bucket_name = mock_session
@@ -229,6 +235,7 @@ async def test_execute_cleanup_deletes_files(mock_session, sample_dataset):
         assert "Contents" not in response
 
 
+@pytest.mark.asyncio
 async def test_execute_cleanup_dry_run_does_not_delete(mock_session, sample_dataset):
     """Dry run should not actually delete files."""
     session, bucket_name = mock_session
@@ -253,6 +260,7 @@ async def test_execute_cleanup_dry_run_does_not_delete(mock_session, sample_data
 
 
 @pytest.mark.parametrize("file_count", [999, 1000, 1001, 2500])
+@pytest.mark.asyncio
 async def test_execute_cleanup_multichunk(mock_session, sample_dataset, file_count):
     """Handles files near and significantly above the 1000-file batch limit."""
     session, bucket_name = mock_session
@@ -273,6 +281,7 @@ async def test_execute_cleanup_multichunk(mock_session, sample_dataset, file_cou
 # ============================================================================
 
 
+@pytest.mark.asyncio
 async def test_full_cleanup_pipeline(mock_session, sample_dataset, git_repo_simple):
     """Test complete flow: plan -> execute."""
     session, bucket_name = mock_session
