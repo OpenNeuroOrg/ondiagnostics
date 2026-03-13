@@ -1,8 +1,10 @@
 """Tests for main pipeline orchestration."""
 
-import pytest
-from unittest.mock import AsyncMock, Mock, patch
 import asyncio
+from collections.abc import AsyncIterator
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from ondiagnostics.__main__ import (
     add_producer,
@@ -18,10 +20,10 @@ from ondiagnostics.graphql import Dataset
 
 
 @pytest.mark.asyncio
-async def test_add_producer_creates_task(mock_progress):
+async def test_add_producer_creates_task(mock_progress: Mock) -> None:
     """Test add_producer creates a task and queue."""
 
-    async def mock_generator():
+    async def mock_generator() -> AsyncIterator[Dataset]:
         yield Dataset("ds000001", "1.0.0")
         yield Dataset("ds000002", "2.0.0")
 
@@ -41,6 +43,7 @@ async def test_add_producer_creates_task(mock_progress):
 
     # Should be able to get items from queue
     item1 = await asyncio.wait_for(queue.get(), timeout=1.0)
+    assert item1 is not None
     assert item1.id == "ds000001"
 
 
@@ -50,12 +53,14 @@ async def test_add_producer_creates_task(mock_progress):
 
 
 @pytest.mark.asyncio
-async def test_add_consumer_processes_items(mock_progress):
+async def test_add_consumer_processes_items(mock_progress: Mock) -> None:
     """Test add_consumer processes items from input queue."""
     from ondiagnostics.pipeline import ProgressQueue
 
     # Create input queue with test data
-    input_queue = ProgressQueue(mock_progress, maxsize=10)
+    input_queue: ProgressQueue[Dataset | None] = ProgressQueue(
+        mock_progress, maxsize=10
+    )
 
     # Mock worker function
     processed = []
@@ -89,12 +94,12 @@ async def test_add_consumer_processes_items(mock_progress):
 
 
 @pytest.mark.asyncio
-async def test_run_pipeline_all_datasets(monkeypatch):
+async def test_run_pipeline_all_datasets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test run_pipeline processes all datasets when no IDs specified."""
     mock_client = Mock()
     mock_count = 3
 
-    async def mock_generator(client):
+    async def mock_generator(client: Mock) -> AsyncIterator[Dataset]:
         yield Dataset("ds000001", "1.0.0")
         yield Dataset("ds000002", "2.0.0")
         yield Dataset("ds000003", "3.0.0")
@@ -117,11 +122,11 @@ async def test_run_pipeline_all_datasets(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_run_pipeline_specific_datasets(monkeypatch):
+async def test_run_pipeline_specific_datasets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test run_pipeline processes only specific dataset IDs."""
     mock_client = Mock()
 
-    async def mock_generator(client, ids):
+    async def mock_generator(client: Mock, ids: list[str]) -> AsyncIterator[Dataset]:
         for id in ids:
             yield Dataset(id, "1.0.0")
 
@@ -143,7 +148,7 @@ async def test_run_pipeline_specific_datasets(monkeypatch):
 # ============================================================================
 
 
-def test_check_sync_command():
+def test_check_sync_command() -> None:
     """Test check_sync CLI command."""
     from typer.testing import CliRunner
     from ondiagnostics.__main__ import app
@@ -157,7 +162,7 @@ def test_check_sync_command():
         assert "Check synchronization status" in result.output
 
 
-def test_clean_s3_command():
+def test_clean_s3_command() -> None:
     """Test clean_s3 CLI command."""
     from typer.testing import CliRunner
     from ondiagnostics.__main__ import app
@@ -170,7 +175,7 @@ def test_clean_s3_command():
         assert "Clean up S3" in result.output
 
 
-def test_check_sync():
+def test_check_sync() -> None:
     """Test clean_s3 accepts dataset IDs and passes them to run_pipeline."""
     from typer.testing import CliRunner
     from ondiagnostics.__main__ import app
@@ -190,7 +195,7 @@ def test_check_sync():
             mock_pipeline.assert_called_once()
 
 
-def test_clean_s3_with_dataset_ids():
+def test_clean_s3_with_dataset_ids() -> None:
     """Test clean_s3 accepts dataset IDs and passes them to run_pipeline."""
     from typer.testing import CliRunner
     from ondiagnostics.__main__ import app
@@ -218,7 +223,7 @@ def test_clean_s3_with_dataset_ids():
 
 
 @pytest.fixture
-def mock_progress():
+def mock_progress() -> Mock:
     """Mock Rich Progress object."""
     progress = Mock()
     progress.tasks = [(task := Mock())]

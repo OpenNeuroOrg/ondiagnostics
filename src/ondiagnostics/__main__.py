@@ -32,11 +32,10 @@ if TYPE_CHECKING:
         def id(self) -> str: ...
 
     T = TypeVar("T", bound=HasId)
-    T_co = TypeVar("T_co", bound=HasId, covariant=True)
     R = TypeVar("R", bound=HasId)
 
 
-app: Typer = Typer()
+app = Typer()
 
 
 class LogLevel(str, Enum):
@@ -44,9 +43,6 @@ class LogLevel(str, Enum):
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
-
-
-type DatasetQueue[T_co] = ProgressQueue[T_co | None]
 
 
 def add_producer(
@@ -139,9 +135,7 @@ async def run_pipeline(
         BarColumn(),
         MofNCompleteColumn(),
     ) as progress:
-        queue: DatasetQueue = add_producer(
-            "Fetching", dataset_source, progress, total=total
-        )
+        queue = add_producer("Fetching", dataset_source, progress, total=total)
         queue = add_consumer("Checking", check_remote, queue, 20)
 
         if aws_config and cache_dir:
@@ -152,7 +146,7 @@ async def run_pipeline(
             queue = add_consumer(
                 "Cloning", lambda d: clone_dataset(d, cache_dir), queue, 10
             )
-            queue = add_consumer(
+            plan_queue = add_consumer(
                 "Checking S3",
                 lambda d: plan_cleanup(d, cache_dir, session, bucket_name),
                 queue,
@@ -161,7 +155,7 @@ async def run_pipeline(
             queue = add_consumer(
                 "Cleaning S3",
                 lambda plan: execute_cleanup(plan, session, bucket_name, dry_run),
-                queue,
+                plan_queue,
                 5,
             )
 

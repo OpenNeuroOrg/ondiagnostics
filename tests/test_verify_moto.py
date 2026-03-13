@@ -4,15 +4,13 @@ import pytest
 import aioboto3
 from aiomoto import mock_aws
 from botocore import UNSIGNED
-from botocore.config import Config
+from aiobotocore.config import AioConfig
 
-pytestmark = pytest.mark.asyncio
-
-CONFIG = Config(signature_version=UNSIGNED)
+CONFIG = AioConfig(signature_version=UNSIGNED)
 
 
 # @pytest.mark.integration
-async def test_real_s3_openneuro_accessible():
+async def test_real_s3_openneuro_accessible() -> None:
     """Verify we can access real OpenNeuro S3 bucket (for test validity)."""
     session = aioboto3.Session()
 
@@ -29,7 +27,7 @@ async def test_real_s3_openneuro_accessible():
 
 
 # @pytest.mark.integration
-async def test_aiomoto_pagination_structure_matches_real():
+async def test_aiomoto_pagination_structure_matches_real() -> None:
     """Verify aiomoto's pagination structure matches real S3 structure."""
 
     # Get real S3 response structure
@@ -81,7 +79,7 @@ async def test_aiomoto_pagination_structure_matches_real():
     assert set(real_obj.keys()) ^ set(aiomoto_obj.keys()) <= {"ChecksumAlgorithm"}
 
 
-async def test_aiomoto_delete_behavior():
+async def test_aiomoto_delete_behavior() -> None:
     """Verify aiomoto's delete_objects behaves sensibly."""
 
     async with mock_aws():
@@ -124,7 +122,7 @@ async def test_aiomoto_delete_behavior():
             assert "file2.txt" in remaining_keys
 
 
-async def test_aiomoto_paginator_behavior():
+async def test_aiomoto_paginator_behavior() -> None:
     """Verify aiomoto's paginator works as expected."""
 
     async with mock_aws():

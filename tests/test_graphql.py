@@ -18,7 +18,7 @@ from ondiagnostics.graphql import (
 )
 
 
-def test_dataset_creation():
+def test_dataset_creation() -> None:
     """Test creating a Dataset."""
     dataset = Dataset(id="ds000001", tag="1.0.0", hexsha="abc123")
     assert dataset.id == "ds000001"
@@ -31,7 +31,7 @@ def test_dataset_creation():
     assert dataset.hexsha == "unknown"
 
 
-def test_converter_structure():
+def test_converter_structure() -> None:
     """Test cattrs converter structures nested data correctly."""
     data = {
         "datasets": {
@@ -55,12 +55,13 @@ def test_converter_structure():
 
     assert isinstance(response, GraphQLResponse)
     assert len(response.datasets.edges) == 1
+    assert response.datasets.edges[0] is not None
     assert response.datasets.edges[0].node.id == "ds000001"
     assert response.datasets.edges[0].node.latestSnapshot.tag == "1.0.0"
     assert response.datasets.pageInfo.count == 1
 
 
-def test_converter_structure_single_dataset():
+def test_converter_structure_single_dataset() -> None:
     """Test cattrs converter structures single dataset data correctly."""
     data = {
         "dataset": {
@@ -83,7 +84,7 @@ def test_converter_structure_single_dataset():
 
 
 @pytest.mark.asyncio
-async def test_get_dataset_count():
+async def test_get_dataset_count() -> None:
     """Test getting total dataset count."""
     mock_client = Mock(
         spec_set=gql.Client,
@@ -105,7 +106,7 @@ async def test_get_dataset_count():
 
 
 @pytest.mark.asyncio
-async def test_datasets_generator():
+async def test_datasets_generator() -> None:
     """Test dataset generator yields all datasets."""
 
     pages = [
@@ -186,7 +187,7 @@ async def test_datasets_generator():
 
 
 @pytest.mark.asyncio
-async def test_get_dataset():
+async def test_get_dataset() -> None:
     """Test getting a single dataset by ID."""
     mock_client = Mock(
         spec_set=gql.Client,
@@ -215,7 +216,7 @@ async def test_get_dataset():
 
 
 @pytest.mark.asyncio
-async def test_get_dataset_not_found():
+async def test_get_dataset_not_found() -> None:
     """Test getting a dataset that doesn't exist returns None."""
     mock_client = Mock(
         spec_set=gql.Client,
@@ -231,7 +232,7 @@ async def test_get_dataset_not_found():
 
 
 @pytest.mark.asyncio
-async def test_get_dataset_transport_error():
+async def test_get_dataset_transport_error() -> None:
     """Test getting a dataset handles transport errors."""
     mock_client = Mock(
         spec_set=gql.Client,
@@ -247,7 +248,7 @@ async def test_get_dataset_transport_error():
 
 
 @pytest.mark.asyncio
-async def test_datasets_by_ids_generator():
+async def test_datasets_by_ids_generator() -> None:
     """Test generator yields datasets for specific IDs."""
     responses = [
         {
@@ -292,7 +293,7 @@ async def test_datasets_by_ids_generator():
 
 
 @pytest.mark.asyncio
-async def test_datasets_by_ids_generator_empty_list():
+async def test_datasets_by_ids_generator_empty_list() -> None:
     """Test generator handles empty ID list."""
     mock_client = Mock(spec_set=gql.Client)
 

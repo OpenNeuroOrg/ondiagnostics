@@ -1,6 +1,7 @@
 """Tests for AWS configuration loading."""
 
 import os
+from pathlib import Path
 
 import pytest
 import yaml
@@ -16,7 +17,7 @@ AWS_CONFIG = {
 }
 
 
-def test_from_dict():
+def test_from_dict() -> None:
     """Test creating AWSConfig from a dictionary."""
     config = AWSConfig.from_dict(AWS_CONFIG)
 
@@ -26,7 +27,7 @@ def test_from_dict():
     assert config.AWS_REGION == "us-west-2"
 
 
-def test_from_dict_with_defaults():
+def test_from_dict_with_defaults() -> None:
     """Test that from_dict uses default values."""
     data = {
         "AWS_ACCESS_KEY_ID": "test_key",
@@ -38,7 +39,7 @@ def test_from_dict_with_defaults():
     assert config.AWS_REGION == "us-east-1"
 
 
-def test_from_env(monkeypatch):
+def test_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test creating AWSConfig from environment variables."""
     monkeypatch.setattr(os, "environ", AWS_CONFIG)
 
@@ -50,7 +51,7 @@ def test_from_env(monkeypatch):
     assert config.AWS_REGION == "us-west-2"
 
 
-def test_from_env_missing_required(monkeypatch):
+def test_from_env_missing_required(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that from_env raises when required vars are missing."""
     monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
 
@@ -58,7 +59,7 @@ def test_from_env_missing_required(monkeypatch):
         AWSConfig.from_env()
 
 
-def test_from_file(tmp_path):
+def test_from_file(tmp_path: Path) -> None:
     """Test creating AWSConfig from a file."""
     config_file = tmp_path / "config.yaml"
     config_data = {"secrets": {"aws": AWS_CONFIG}}
@@ -72,7 +73,7 @@ def test_from_file(tmp_path):
     assert config.AWS_REGION == "us-west-2"
 
 
-def test_from_file_missing_secrets(tmp_path):
+def test_from_file_missing_secrets(tmp_path: Path) -> None:
     """Test that from_file raises when config is malformed."""
     config_file = tmp_path / "config.yaml"
     config_file.write_text(yaml.dump({"not_secrets": {}}))

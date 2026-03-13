@@ -1,6 +1,8 @@
 """Tests for S3 cleanup tasks."""
 
 import asyncio
+from pathlib import Path
+from typing import AsyncIterator
 
 import pytest
 import aioboto3
@@ -10,8 +12,11 @@ from ondiagnostics.graphql import Dataset
 from ondiagnostics.tasks.s3 import plan_cleanup, execute_cleanup, S3CleanupPlan
 
 
+type SessionSpec = tuple[aioboto3.Session, str]
+
+
 @pytest.fixture
-def git_repo_simple(tmp_path, sample_dataset):
+def git_repo_simple(tmp_path: Path, sample_dataset: Dataset) -> Path:
     """Create a simple git repo with just a few files at root level."""
     import pygit2
 
@@ -35,7 +40,7 @@ def git_repo_simple(tmp_path, sample_dataset):
 
 
 @pytest.fixture
-async def mock_session():
+async def mock_session() -> AsyncIterator[SessionSpec]:
     """Provide a mocked S3 session and bucket."""
     async with mock_aws():
         session = aioboto3.Session()
@@ -66,8 +71,10 @@ async def populate_bucket(
 
 @pytest.mark.asyncio
 async def test_plan_cleanup_identifies_orphaned_files(
-    mock_session, sample_dataset, git_repo_simple
-):
+    mock_session: SessionSpec,
+    sample_dataset: Dataset,
+    git_repo_simple: Path,
+) -> None:
     """Files in S3 but not in git tree should be marked for deletion."""
 
     session, bucket_name = mock_session
@@ -100,8 +107,10 @@ async def test_plan_cleanup_identifies_orphaned_files(
 
 @pytest.mark.asyncio
 async def test_plan_cleanup_returns_none_when_no_orphans(
-    mock_session, sample_dataset, git_repo_simple
-):
+    mock_session: SessionSpec,
+    sample_dataset: Dataset,
+    git_repo_simple: Path,
+) -> None:
     """When S3 matches git tree exactly, should return None."""
     session, bucket_name = mock_session
     prefix = f"{sample_dataset.id}/"
@@ -122,8 +131,10 @@ async def test_plan_cleanup_returns_none_when_no_orphans(
 
 @pytest.mark.asyncio
 async def test_plan_cleanup_returns_none_when_s3_empty(
-    mock_session, sample_dataset, git_repo_simple
-):
+    mock_session: SessionSpec,
+    sample_dataset: Dataset,
+    git_repo_simple: Path,
+) -> None:
     """When S3 has no objects with the prefix, should return None."""
     session, bucket_name = mock_session
 
@@ -134,8 +145,9 @@ async def test_plan_cleanup_returns_none_when_s3_empty(
 
 @pytest.mark.asyncio
 async def test_plan_cleanup_handles_missing_tag(
-    mock_session, sample_dataset, git_repo_simple
-):
+    mock_session: SessionSpec,
+    git_repo_simple: Path,
+) -> None:
     """Should return None and log error when git tag doesn't exist."""
     session, bucket_name = mock_session
 
@@ -149,8 +161,10 @@ async def test_plan_cleanup_handles_missing_tag(
 
 @pytest.mark.asyncio
 async def test_plan_cleanup_handles_missing_repo(
-    mock_session, sample_dataset, tmp_path
-):
+    mock_session: SessionSpec,
+    sample_dataset: Dataset,
+    tmp_path: Path,
+) -> None:
     """Should return None when git repository doesn't exist."""
     session, bucket_name = mock_session
 
@@ -162,8 +176,10 @@ async def test_plan_cleanup_handles_missing_repo(
 
 @pytest.mark.asyncio
 async def test_plan_cleanup_processes_multiple_pages(
-    mock_session, sample_dataset, git_repo_simple
-):
+    mock_session: SessionSpec,
+    sample_dataset: Dataset,
+    git_repo_simple: Path,
+) -> None:
     """Should process all pages when S3 listing is paginated."""
     session, bucket_name = mock_session
     prefix = f"{sample_dataset.id}/"
@@ -182,8 +198,10 @@ async def test_plan_cleanup_processes_multiple_pages(
 
 @pytest.mark.asyncio
 async def test_plan_cleanup_ignores_wrong_prefix(
-    mock_session, sample_dataset, git_repo_simple
-):
+    mock_session: SessionSpec,
+    sample_dataset: Dataset,
+    git_repo_simple: Path,
+) -> None:
     """Should only consider files with the correct dataset prefix."""
     session, bucket_name = mock_session
     prefix = f"{sample_dataset.id}/"
@@ -212,7 +230,9 @@ async def test_plan_cleanup_ignores_wrong_prefix(
 
 
 @pytest.mark.asyncio
-async def test_execute_cleanup_deletes_files(mock_session, sample_dataset):
+async def test_execute_cleanup_deletes_files(
+    mock_session: SessionSpec, sample_dataset: Dataset
+) -> None:
     """Should delete all files in the plan."""
     session, bucket_name = mock_session
     prefix = f"{sample_dataset.id}/"
@@ -236,7 +256,9 @@ async def test_execute_cleanup_deletes_files(mock_session, sample_dataset):
 
 
 @pytest.mark.asyncio
-async def test_execute_cleanup_dry_run_does_not_delete(mock_session, sample_dataset):
+async def test_execute_cleanup_dry_run_does_not_delete(
+    mock_session: SessionSpec, sample_dataset: Dataset
+) -> None:
     """Dry run should not actually delete files."""
     session, bucket_name = mock_session
     prefix = f"{sample_dataset.id}/"
@@ -261,7 +283,9 @@ async def test_execute_cleanup_dry_run_does_not_delete(mock_session, sample_data
 
 @pytest.mark.parametrize("file_count", [999, 1000, 1001, 2500])
 @pytest.mark.asyncio
-async def test_execute_cleanup_multichunk(mock_session, sample_dataset, file_count):
+async def test_execute_cleanup_multichunk(
+    mock_session: SessionSpec, sample_dataset: Dataset, file_count: int
+) -> None:
     """Handles files near and significantly above the 1000-file batch limit."""
     session, bucket_name = mock_session
     prefix = f"{sample_dataset.id}/"
@@ -282,7 +306,9 @@ async def test_execute_cleanup_multichunk(mock_session, sample_dataset, file_cou
 
 
 @pytest.mark.asyncio
-async def test_full_cleanup_pipeline(mock_session, sample_dataset, git_repo_simple):
+async def test_full_cleanup_pipeline(
+    mock_session: SessionSpec, sample_dataset: Dataset, git_repo_simple: Path
+) -> None:
     """Test complete flow: plan -> execute."""
     session, bucket_name = mock_session
     prefix = f"{sample_dataset.id}/"
@@ -322,7 +348,7 @@ async def test_full_cleanup_pipeline(mock_session, sample_dataset, git_repo_simp
     assert f"{prefix}old2.txt" not in remaining_keys
 
 
-def test_s3_cleanup_plan_id_property(sample_dataset):
+def test_s3_cleanup_plan_id_property(sample_dataset: Dataset) -> None:
     """Smoke test: S3CleanupPlan.id should return dataset.id."""
     plan = S3CleanupPlan(
         dataset=sample_dataset, files_to_delete=["file1.txt", "file2.txt"]
