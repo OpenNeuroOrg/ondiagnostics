@@ -66,7 +66,7 @@ async for dataset in datasets_generator(client):
 
 ```python
 from ondiagnostics.graphql import Dataset
-from ondiagnostics.tasks import clone_dataset
+from ondiagnostics.tasks.git import clone_dataset
 
 await clone_dataset(Dataset(id='ds000001', tag='1.0.0'))
 ```
