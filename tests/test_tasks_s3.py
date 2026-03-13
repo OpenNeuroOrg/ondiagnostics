@@ -15,11 +15,12 @@ from ondiagnostics.tasks.s3 import plan_cleanup, execute_cleanup, S3CleanupPlan
 type SessionSpec = tuple[aioboto3.Session, str]
 
 
-@pytest.fixture
-def git_repo_simple(tmp_path: Path, sample_dataset: Dataset) -> Path:
+@pytest.fixture(scope="session")
+def git_repo_simple(tmp_path_factory: pytest.TempPathFactory, sample_dataset: Dataset) -> Path:
     """Create a simple git repo with just a few files at root level."""
     import pygit2
 
+    tmp_path = tmp_path_factory.mktemp("repos")
     repo_path = tmp_path / f"{sample_dataset.id}.git"
     repo_path.mkdir()
 

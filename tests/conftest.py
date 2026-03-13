@@ -37,7 +37,7 @@ def git_repo_with_tag(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, s
     return repo_path, str(repo.revparse_single("1.0.0").id)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_dataset() -> Dataset:
     """Create a sample dataset for testing."""
     return Dataset(id="ds000001", tag="1.0.0", hexsha="abc123def456")
