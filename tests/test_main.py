@@ -19,7 +19,6 @@ from ondiagnostics.graphql import Dataset
 # ============================================================================
 
 
-@pytest.mark.asyncio
 async def test_add_producer_creates_task(mock_progress: Mock) -> None:
     """Test add_producer creates a task and queue."""
 
@@ -52,7 +51,6 @@ async def test_add_producer_creates_task(mock_progress: Mock) -> None:
 # ============================================================================
 
 
-@pytest.mark.asyncio
 async def test_add_consumer_processes_items(mock_progress: Mock) -> None:
     """Test add_consumer processes items from input queue."""
     from ondiagnostics.pipeline import ProgressQueue
@@ -93,7 +91,6 @@ async def test_add_consumer_processes_items(mock_progress: Mock) -> None:
 # ============================================================================
 
 
-@pytest.mark.asyncio
 async def test_run_pipeline_all_datasets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test run_pipeline processes all datasets when no IDs specified."""
     mock_client = Mock()
@@ -121,7 +118,6 @@ async def test_run_pipeline_all_datasets(monkeypatch: pytest.MonkeyPatch) -> Non
     assert result == 0
 
 
-@pytest.mark.asyncio
 async def test_run_pipeline_specific_datasets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test run_pipeline processes only specific dataset IDs."""
     mock_client = Mock()

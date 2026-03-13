@@ -69,7 +69,6 @@ async def populate_bucket(
 # ============================================================================
 
 
-@pytest.mark.asyncio
 async def test_plan_cleanup_identifies_orphaned_files(
     mock_session: SessionSpec,
     sample_dataset: Dataset,
@@ -105,7 +104,6 @@ async def test_plan_cleanup_identifies_orphaned_files(
     assert f"{prefix}file2.txt" not in plan.files_to_delete
 
 
-@pytest.mark.asyncio
 async def test_plan_cleanup_returns_none_when_no_orphans(
     mock_session: SessionSpec,
     sample_dataset: Dataset,
@@ -129,7 +127,6 @@ async def test_plan_cleanup_returns_none_when_no_orphans(
     assert plan is None
 
 
-@pytest.mark.asyncio
 async def test_plan_cleanup_returns_none_when_s3_empty(
     mock_session: SessionSpec,
     sample_dataset: Dataset,
@@ -143,7 +140,6 @@ async def test_plan_cleanup_returns_none_when_s3_empty(
     assert plan is None
 
 
-@pytest.mark.asyncio
 async def test_plan_cleanup_handles_missing_tag(
     mock_session: SessionSpec,
     git_repo_simple: Path,
@@ -159,7 +155,6 @@ async def test_plan_cleanup_handles_missing_tag(
     assert plan is None
 
 
-@pytest.mark.asyncio
 async def test_plan_cleanup_handles_missing_repo(
     mock_session: SessionSpec,
     sample_dataset: Dataset,
@@ -174,7 +169,6 @@ async def test_plan_cleanup_handles_missing_repo(
     assert plan is None
 
 
-@pytest.mark.asyncio
 async def test_plan_cleanup_processes_multiple_pages(
     mock_session: SessionSpec,
     sample_dataset: Dataset,
@@ -196,7 +190,6 @@ async def test_plan_cleanup_processes_multiple_pages(
     assert len(plan.files_to_delete) == 150
 
 
-@pytest.mark.asyncio
 async def test_plan_cleanup_ignores_wrong_prefix(
     mock_session: SessionSpec,
     sample_dataset: Dataset,
@@ -229,7 +222,6 @@ async def test_plan_cleanup_ignores_wrong_prefix(
 # ============================================================================
 
 
-@pytest.mark.asyncio
 async def test_execute_cleanup_deletes_files(
     mock_session: SessionSpec, sample_dataset: Dataset
 ) -> None:
@@ -255,7 +247,6 @@ async def test_execute_cleanup_deletes_files(
         assert "Contents" not in response
 
 
-@pytest.mark.asyncio
 async def test_execute_cleanup_dry_run_does_not_delete(
     mock_session: SessionSpec, sample_dataset: Dataset
 ) -> None:
@@ -282,7 +273,6 @@ async def test_execute_cleanup_dry_run_does_not_delete(
 
 
 @pytest.mark.parametrize("file_count", [999, 1000, 1001, 2500])
-@pytest.mark.asyncio
 async def test_execute_cleanup_multichunk(
     mock_session: SessionSpec, sample_dataset: Dataset, file_count: int
 ) -> None:
@@ -305,7 +295,6 @@ async def test_execute_cleanup_multichunk(
 # ============================================================================
 
 
-@pytest.mark.asyncio
 async def test_full_cleanup_pipeline(
     mock_session: SessionSpec, sample_dataset: Dataset, git_repo_simple: Path
 ) -> None:

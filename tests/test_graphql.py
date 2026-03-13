@@ -83,7 +83,6 @@ def test_converter_structure_single_dataset() -> None:
     assert response.dataset.latestSnapshot.hexsha == "abc123"
 
 
-@pytest.mark.asyncio
 async def test_get_dataset_count() -> None:
     """Test getting total dataset count."""
     mock_client = Mock(
@@ -105,7 +104,6 @@ async def test_get_dataset_count() -> None:
     mock_client.execute_async.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_datasets_generator() -> None:
     """Test dataset generator yields all datasets."""
 
@@ -186,7 +184,6 @@ async def test_datasets_generator() -> None:
     assert datasets[1].id == "ds000002"
 
 
-@pytest.mark.asyncio
 async def test_get_dataset() -> None:
     """Test getting a single dataset by ID."""
     mock_client = Mock(
@@ -215,7 +212,6 @@ async def test_get_dataset() -> None:
     mock_client.execute_async.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_get_dataset_not_found() -> None:
     """Test getting a dataset that doesn't exist returns None."""
     mock_client = Mock(
@@ -231,7 +227,6 @@ async def test_get_dataset_not_found() -> None:
     assert dataset is None
 
 
-@pytest.mark.asyncio
 async def test_get_dataset_transport_error() -> None:
     """Test getting a dataset handles transport errors."""
     mock_client = Mock(
@@ -247,7 +242,6 @@ async def test_get_dataset_transport_error() -> None:
     assert dataset is None
 
 
-@pytest.mark.asyncio
 async def test_datasets_by_ids_generator() -> None:
     """Test generator yields datasets for specific IDs."""
     responses = [
@@ -292,7 +286,6 @@ async def test_datasets_by_ids_generator() -> None:
     assert datasets[1].tag == "3.0.0"
 
 
-@pytest.mark.asyncio
 async def test_datasets_by_ids_generator_empty_list() -> None:
     """Test generator handles empty ID list."""
     mock_client = Mock(spec_set=gql.Client)

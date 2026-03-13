@@ -5,7 +5,6 @@ import pytest
 from ondiagnostics.subprocs import git
 
 
-@pytest.mark.asyncio
 async def test_git_success(git_repo_with_tag: tuple[Path, str]) -> None:
     """Test git command execution with successful result."""
     repo_path, commit_sha = git_repo_with_tag
@@ -19,7 +18,6 @@ async def test_git_success(git_repo_with_tag: tuple[Path, str]) -> None:
     assert result.stderr == b""
 
 
-@pytest.mark.asyncio
 async def test_git_failure() -> None:
     """Test git command execution with failure."""
     # Use a command that will fail
@@ -29,7 +27,6 @@ async def test_git_failure() -> None:
     assert result.stderr != b""
 
 
-@pytest.mark.asyncio
 async def test_git_multiple_args(git_repo_with_tag: tuple[Path, str]) -> None:
     """Test git command with multiple arguments."""
     repo_path, commit_sha = git_repo_with_tag

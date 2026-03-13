@@ -14,7 +14,6 @@ from ondiagnostics.tasks.git import check_remote, clone_dataset
 # Tests for check_remote()
 
 
-@pytest.mark.asyncio
 async def test_check_remote_success(sample_dataset: Dataset) -> None:
     """Test successful remote check."""
     ls_remote_output = f"{sample_dataset.hexsha}\trefs/tags/{sample_dataset.tag}\n"
@@ -33,7 +32,6 @@ async def test_check_remote_success(sample_dataset: Dataset) -> None:
         )
 
 
-@pytest.mark.asyncio
 async def test_check_remote_repository_not_found(sample_dataset: Dataset) -> None:
     """Test check_remote when repository doesn't exist."""
     with patch("ondiagnostics.tasks.git.git") as mock_git:
@@ -44,7 +42,6 @@ async def test_check_remote_repository_not_found(sample_dataset: Dataset) -> Non
         assert result is None
 
 
-@pytest.mark.asyncio
 async def test_check_remote_tag_missing(sample_dataset: Dataset) -> None:
     """Test check_remote when tag doesn't exist."""
     with patch("ondiagnostics.tasks.git.git") as mock_git:
@@ -55,7 +52,6 @@ async def test_check_remote_tag_missing(sample_dataset: Dataset) -> None:
         assert result is None
 
 
-@pytest.mark.asyncio
 async def test_check_remote_empty_response(sample_dataset: Dataset) -> None:
     """Test check_remote with empty ls-remote output."""
     with patch("ondiagnostics.tasks.git.git") as mock_git:
@@ -66,7 +62,6 @@ async def test_check_remote_empty_response(sample_dataset: Dataset) -> None:
         assert result is None
 
 
-@pytest.mark.asyncio
 async def test_check_remote_sha_mismatch(sample_dataset: Dataset) -> None:
     """Test check_remote when commit SHA doesn't match."""
     wrong_sha = "different123"
@@ -80,7 +75,6 @@ async def test_check_remote_sha_mismatch(sample_dataset: Dataset) -> None:
         assert result is None
 
 
-@pytest.mark.asyncio
 async def test_check_remote_ref_mismatch(sample_dataset: Dataset) -> None:
     """Test check_remote when ref doesn't match expected format."""
     ls_remote_output = f"{sample_dataset.hexsha}\trefs/heads/{sample_dataset.tag}\n"
@@ -96,7 +90,6 @@ async def test_check_remote_ref_mismatch(sample_dataset: Dataset) -> None:
 # Tests for clone_dataset()
 
 
-@pytest.mark.asyncio
 async def test_clone_dataset_new_clone(sample_dataset: Dataset, tmp_path: Path) -> None:
     """Test cloning a new dataset."""
     cache_dir = tmp_path / "cache"
@@ -117,7 +110,6 @@ async def test_clone_dataset_new_clone(sample_dataset: Dataset, tmp_path: Path) 
         assert sample_dataset.tag in call_args
 
 
-@pytest.mark.asyncio
 async def test_clone_dataset_already_has_tag(
     sample_dataset: Dataset, tmp_path: Path, git_repo_with_tag: tuple[Path, str]
 ) -> None:
@@ -133,7 +125,6 @@ async def test_clone_dataset_already_has_tag(
     assert result == sample_dataset
 
 
-@pytest.mark.asyncio
 async def test_clone_dataset_needs_update(
     sample_dataset: Dataset, tmp_path: Path, git_repo_with_tag: tuple[Path, str]
 ) -> None:
@@ -160,7 +151,6 @@ async def test_clone_dataset_needs_update(
     assert sample_dataset.tag in call_args
 
 
-@pytest.mark.asyncio
 async def test_clone_dataset_clone_failure(
     sample_dataset: Dataset, tmp_path: Path
 ) -> None:
@@ -177,7 +167,6 @@ async def test_clone_dataset_clone_failure(
         assert result is None
 
 
-@pytest.mark.asyncio
 async def test_clone_dataset_fetch_failure(
     sample_dataset: Dataset, tmp_path: Path, git_repo_with_tag: tuple[Path, str]
 ) -> None:

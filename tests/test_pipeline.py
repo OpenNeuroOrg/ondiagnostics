@@ -17,7 +17,6 @@ async def as_async(iterable: Iterable[T]) -> AsyncIterable[T]:
         yield i
 
 
-@pytest.mark.asyncio
 async def test_producer_base() -> None:
     """Test producer puts all items in queue."""
     queue: asyncio.Queue[int | None] = asyncio.Queue()
@@ -32,7 +31,6 @@ async def test_producer_base() -> None:
     assert value == 5
 
 
-@pytest.mark.asyncio
 async def test_producer_with_callback() -> None:
     """Test producer calls callback for each item."""
     values = []
@@ -48,7 +46,6 @@ async def test_producer_with_callback() -> None:
     assert values == [0, 1, 2, 3, 4]
 
 
-@pytest.mark.asyncio
 async def test_producer_exception_still_sends_sentinel() -> None:
     """Test producer sends None sentinel even if generator raises."""
 
@@ -71,7 +68,6 @@ async def test_producer_exception_still_sends_sentinel() -> None:
     assert item is None
 
 
-@pytest.mark.asyncio
 async def test_consumer_success() -> None:
     """Test consumer processes items and puts results in output queue."""
     input_queue: asyncio.Queue[int | None] = asyncio.Queue()
@@ -93,7 +89,6 @@ async def test_consumer_success() -> None:
     assert item is None
 
 
-@pytest.mark.asyncio
 async def test_consumer_filters_none() -> None:
     """Test consumer doesn't pass None results downstream."""
     input_queue: asyncio.Queue[int | None] = asyncio.Queue()
@@ -114,7 +109,6 @@ async def test_consumer_filters_none() -> None:
     assert results == [0, 2, 4]
 
 
-@pytest.mark.asyncio
 async def test_consumer_callback() -> None:
     """Test consumer calls completion callback."""
     input_queue: asyncio.Queue[int | None] = asyncio.Queue()
@@ -141,7 +135,6 @@ async def test_consumer_callback() -> None:
     assert completed[4] == (4, 0.25, True)
 
 
-@pytest.mark.asyncio
 async def test_consumer_respects_semaphore() -> None:
     """Test consumer respects semaphore for limiting concurrency."""
     input_queue: asyncio.Queue[int | None] = asyncio.Queue()
@@ -165,7 +158,6 @@ async def test_consumer_respects_semaphore() -> None:
     assert max_concurrent <= 5
 
 
-@pytest.mark.asyncio
 async def test_consumer_terminal_without_output_queue() -> None:
     """Test consumer works as terminal consumer (no output queue)."""
     input_queue: asyncio.Queue[int | None] = asyncio.Queue()
@@ -184,7 +176,6 @@ async def test_consumer_terminal_without_output_queue() -> None:
     assert sorted(processed) == [0, 1, 2, 3, 4]
 
 
-@pytest.mark.asyncio
 async def test_consumer_processes_concurrently() -> None:
     """Test that consumer actually processes items concurrently."""
     input_queue: asyncio.Queue[int | None] = asyncio.Queue()
@@ -207,7 +198,6 @@ async def test_consumer_processes_concurrently() -> None:
     assert total_time < 0.5  # Much less than 10 * 0.1 = 1.0s
 
 
-@pytest.mark.asyncio
 async def test_progress_queue_updates_put_task() -> None:
     """Test ProgressQueue updates put_task_id on put."""
     progress = Progress()
@@ -224,7 +214,6 @@ async def test_progress_queue_updates_put_task() -> None:
     assert task.completed == 3
 
 
-@pytest.mark.asyncio
 async def test_progress_queue_updates_get_task_total() -> None:
     """Test ProgressQueue updates get_task_id total on put."""
     progress = Progress()
@@ -241,7 +230,6 @@ async def test_progress_queue_updates_get_task_total() -> None:
     assert task.total == 3
 
 
-@pytest.mark.asyncio
 async def test_progress_queue_both_tasks() -> None:
     """Test ProgressQueue with both put and get task IDs."""
     progress = Progress()
