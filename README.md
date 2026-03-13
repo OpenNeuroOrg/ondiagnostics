@@ -4,9 +4,21 @@ This is a package for diagnosing and fixing issues on OpenNeuro.
 
 ## Installation
 
+This package is not currently published on PyPI.
+To install, clone the repository and run `uv sync`:
+
 ```console
-pip install ondiagnostics
+git clone https://github.com/OpenNeuroOrg/ondiagnostics
+cd ondiagnostics
+uv sync
 ```
+
+You can also use `uv tool install`:
+
+```console
+uv tool install git+https://github.com/OpenNeuroOrg/ondiagnostics
+```
+
 
 ## Usage
 
@@ -28,7 +40,7 @@ In some cases, files from previous versions are not marked as deleted, so
 excess files are downloaded.
 
 ```console
-ondiagnostics clean-s3
+ondiagnostics clean-s3 --dry-run
 ```
 
 This is an expensive operation that will potentially clone all OpenNeuro
