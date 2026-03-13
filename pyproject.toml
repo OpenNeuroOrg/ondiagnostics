@@ -46,3 +46,7 @@ types = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.mypy]
+strict = true
+warn_return_any = true
