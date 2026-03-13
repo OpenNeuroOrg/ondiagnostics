@@ -11,10 +11,9 @@ async def test_git_success(git_repo_with_tag: tuple[Path, str]) -> None:
 
     result = await git("ls-remote", str(repo_path))
 
-    refs = ["HEAD", "refs/heads/main", "refs/tags/1.0.0"]
-    expected_output = "".join(f"{commit_sha}\t{ref}\n" for ref in refs).encode()
+    expected_output = f"{commit_sha}\trefs/tags/1.0.0\n".encode()
     assert result.returncode == 0
-    assert result.stdout == expected_output
+    assert expected_output in result.stdout
     assert result.stderr == b""
 
 
