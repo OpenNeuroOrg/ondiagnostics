@@ -9,6 +9,9 @@ import gql
 from gql.transport.httpx import HTTPXAsyncTransport
 from gql.transport.exceptions import TransportQueryError
 
+from . import logger
+from .pipeline import producer
+
 TYPE_CHECKING = False
 if TYPE_CHECKING:
     from typing import AsyncIterator
@@ -114,9 +117,16 @@ async def get_page(
     client: gql.Client, count: int, after: str | None
 ) -> GraphQLResponse:
     """Fetch a page of datasets from the GraphQL API."""
-    result = await client.execute_async(
-        GET_DATASETS, variable_values={"count": count, "after": after}
-    )
+    try:
+        result = await client.execute_async(
+            GET_DATASETS, variable_values={"count": count, "after": after}
+        )
+    except TransportQueryError as e:
+        if e.data is not None:
+            logger.warning("GraphQL query error, missing dataset in page")
+            result = e.data
+        else:
+            raise e
     return converter.structure(result, GraphQLResponse)
 
 
@@ -141,16 +151,9 @@ async def datasets_generator(client: gql.Client) -> AsyncIterator[Dataset]:
     while page_info.hasNextPage:
         try:
             result = await get_page(client, 100, page_info.endCursor)
-        except TransportQueryError as e:
-            import structlog
-
-            logger = structlog.get_logger()
-            if e.data is not None:
-                logger.warning("GraphQL query error, missing dataset")
-                result = converter.structure(e.data, GraphQLResponse)
-            else:
-                logger.critical("GraphQL query error, cannot continue")
-                break
+        except Exception as e:
+            logger.critical(f"GraphQL query error ({type(e)}), cannot continue")
+            break
 
         page_info = result.datasets.pageInfo
 
