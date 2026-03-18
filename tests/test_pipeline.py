@@ -199,7 +199,7 @@ async def test_consumer_processes_concurrently() -> None:
 
 
 @pytest.mark.parametrize("buffer_size", [0, 1, 5])
-async def test_buffer_transparency(buffer_size) -> None:
+async def test_buffer_transparency(buffer_size: int) -> None:
     async def failing_generator() -> AsyncIterable[int]:
         yield 1
         yield 2

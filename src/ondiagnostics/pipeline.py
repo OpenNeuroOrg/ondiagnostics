@@ -79,7 +79,7 @@ async def consumer(
         await output_queue.put(None)
 
 
-async def buffer(generator: AsyncIterator[T], buffer_size: int) -> AsyncIterator[T]:
+async def buffer(generator: AsyncIterable[T], buffer_size: int) -> AsyncIterable[T]:
     """
     Buffer an async generator by prefetching items in the background.
 
