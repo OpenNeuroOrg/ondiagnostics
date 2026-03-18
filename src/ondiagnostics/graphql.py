@@ -1,5 +1,6 @@
 """GraphQL client for  OpenNeuro datasets."""
 
+import asyncio
 from dataclasses import dataclass
 
 import cattrs
@@ -10,7 +11,7 @@ from gql.transport.httpx import HTTPXAsyncTransport
 from gql.transport.exceptions import TransportQueryError
 
 from . import logger
-from .pipeline import producer
+from .pipeline import buffer
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -136,16 +137,7 @@ async def get_dataset_count(client: gql.Client) -> int:
     return response.datasets.pageInfo.count
 
 
-async def datasets_generator(client: gql.Client) -> AsyncIterator[Dataset]:
-    """
-    Async generator that yields datasets from the GraphQL API.
-
-    Args:
-        client: GraphQL client
-
-    Yields:
-        Dataset objects
-    """
+async def get_pages(client: gql.Client, page_size: int) -> AsyncIterator[DatasetsResponse]:
     page_info = PageInfo()
 
     while page_info.hasNextPage:
@@ -156,11 +148,23 @@ async def datasets_generator(client: gql.Client) -> AsyncIterator[Dataset]:
             break
 
         page_info = result.datasets.pageInfo
+        yield result.datasets
 
-        for edge in result.datasets.edges:
+
+async def datasets_generator(client: gql.Client) -> AsyncIterator[Dataset]:
+    """
+    Async generator that yields datasets from the GraphQL API.
+
+    Args:
+        client: GraphQL client
+
+    Yields:
+        Dataset objects
+    """
+    async for response in buffer(get_pages(client, 100), buffer_size=2):
+        for edge in response.edges:
             if edge is None:
                 continue
-
             yield Dataset(
                 id=edge.node.id,
                 tag=edge.node.latestSnapshot.tag,

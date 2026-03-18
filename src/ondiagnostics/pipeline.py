@@ -79,6 +79,46 @@ async def consumer(
         await output_queue.put(None)
 
 
+async def buffer(generator: AsyncIterator[T], buffer_size: int) -> AsyncIterator[T]:
+    """
+    Buffer an async generator by prefetching items in the background.
+
+    Exceptions from the generator are captured and raised in the consumer context.
+
+    Args:
+        generator: The async generator to buffer
+        buffer_size: Number of items to buffer ahead
+
+    Yields:
+        Items from the generator
+    """
+    # Queue to hold prefetched items or exceptions
+    item_queue: asyncio.Queue[T | Exception | None] = asyncio.Queue(maxsize=buffer_size)
+
+    async def fetch_items() -> None:
+        """Background task that fetches items and puts them in the queue."""
+        try:
+            async for item in generator:
+                await item_queue.put(item)
+            # Signal completion with None
+            await item_queue.put(None)
+        except Exception as e:
+            await item_queue.put(e)
+
+    exception: Exception | None = None
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(fetch_items())
+
+        while (item := await item_queue.get()) is not None:
+            if isinstance(item, Exception):
+                exception = item
+                break
+            yield item
+
+    if exception:
+        raise exception
+
+
 class ProgressQueue[T](asyncio.Queue[T]):
     """Queue that updates a progress bar as items are added and removed."""
 

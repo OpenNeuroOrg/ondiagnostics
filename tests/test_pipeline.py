@@ -7,7 +7,7 @@ from typing import TypeVar
 import pytest
 from rich.progress import Progress
 
-from ondiagnostics.pipeline import producer, consumer, ProgressQueue
+from ondiagnostics.pipeline import producer, consumer, buffer, ProgressQueue
 
 T = TypeVar("T")
 
@@ -196,6 +196,31 @@ async def test_consumer_processes_concurrently() -> None:
     # With concurrency, all 10 should finish in ~0.1s, not 1.0s
     total_time = asyncio.get_event_loop().time() - start_time
     assert total_time < 0.5  # Much less than 10 * 0.1 = 1.0s
+
+
+@pytest.mark.parametrize("buffer_size", [0, 1, 5])
+async def test_buffer_transparency(buffer_size) -> None:
+    async def failing_generator() -> AsyncIterable[int]:
+        yield 1
+        yield 2
+        raise ValueError("Test error")
+        yield 3  # pragma: no cover
+
+    # Verify expected behavior without buffer
+    results = []
+    with pytest.raises(ValueError):
+        async for item in failing_generator():
+            results.append(item)
+
+    assert results == [1, 2]
+
+    # Verify buffer yields same items and propagates exception
+    results = []
+    with pytest.raises(ValueError):
+        async for item in buffer(failing_generator(), buffer_size):
+            results.append(item)
+
+    assert results == [1, 2]
 
 
 async def test_progress_queue_updates_put_task() -> None:
