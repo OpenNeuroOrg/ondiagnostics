@@ -337,6 +337,7 @@ def test_converter_structure_with_snapshots() -> None:
     response = converter.structure(data, GraphQLResponse)
 
     assert isinstance(response, GraphQLResponse)
+    assert response.datasets.edges[0] is not None
     node = response.datasets.edges[0].node
     assert node.id == "ds000001"
     assert node.latestSnapshot.tag == "2.0.0"
@@ -371,6 +372,7 @@ def test_converter_structure_without_snapshots() -> None:
     response = converter.structure(data, GraphQLResponse)
 
     assert isinstance(response, GraphQLResponse)
+    assert response.datasets.edges[0] is not None
     node = response.datasets.edges[0].node
     assert node.id == "ds000001"
     assert node.latestSnapshot.tag == "1.0.0"
