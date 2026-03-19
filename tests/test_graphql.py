@@ -9,12 +9,16 @@ from gql.transport.exceptions import TransportQueryError
 from ondiagnostics.graphql import (
     Dataset,
     GraphQLResponse,
+    Snapshot,
     SingleDatasetResponse,
     converter,
     get_dataset_count,
+    get_page,
     datasets_generator,
     get_dataset,
     datasets_by_ids_generator,
+    GET_DATASETS,
+    GET_DATASETS_WITH_SNAPSHOTS,
 )
 
 
@@ -296,3 +300,107 @@ async def test_datasets_by_ids_generator_empty_list() -> None:
 
     assert len(datasets) == 0
     mock_client.execute_async.assert_not_called()
+
+
+def test_converter_structure_with_snapshots() -> None:
+    """Test cattrs converter structures response with snapshots present."""
+    data = {
+        "datasets": {
+            "edges": [
+                {
+                    "node": {
+                        "id": "ds000001",
+                        "latestSnapshot": {
+                            "tag": "2.0.0",
+                            "created": "2023-06-01",
+                            "hexsha": "abc123",
+                        },
+                        "snapshots": [
+                            {
+                                "tag": "1.0.0",
+                                "hexsha": "aaa111",
+                                "created": "2023-01-01",
+                            },
+                            {
+                                "tag": "2.0.0",
+                                "hexsha": "abc123",
+                                "created": "2023-06-01",
+                            },
+                        ],
+                    }
+                }
+            ],
+            "pageInfo": {"hasNextPage": False, "endCursor": None, "count": 1},
+        }
+    }
+
+    response = converter.structure(data, GraphQLResponse)
+
+    assert isinstance(response, GraphQLResponse)
+    assert response.datasets.edges[0] is not None
+    node = response.datasets.edges[0].node
+    assert node.id == "ds000001"
+    assert node.latestSnapshot.tag == "2.0.0"
+    assert node.snapshots is not None
+    assert len(node.snapshots) == 2
+    assert isinstance(node.snapshots[0], Snapshot)
+    assert node.snapshots[0].tag == "1.0.0"
+    assert node.snapshots[0].hexsha == "aaa111"
+    assert node.snapshots[1].tag == "2.0.0"
+
+
+def test_converter_structure_without_snapshots() -> None:
+    """Test cattrs converter structures response without snapshots (backward compat)."""
+    data = {
+        "datasets": {
+            "edges": [
+                {
+                    "node": {
+                        "id": "ds000001",
+                        "latestSnapshot": {
+                            "tag": "1.0.0",
+                            "created": "2023-01-01",
+                            "hexsha": "abc123",
+                        },
+                    }
+                }
+            ],
+            "pageInfo": {"hasNextPage": False, "endCursor": None, "count": 1},
+        }
+    }
+
+    response = converter.structure(data, GraphQLResponse)
+
+    assert isinstance(response, GraphQLResponse)
+    assert response.datasets.edges[0] is not None
+    node = response.datasets.edges[0].node
+    assert node.id == "ds000001"
+    assert node.latestSnapshot.tag == "1.0.0"
+    assert node.snapshots is None
+
+
+async def test_get_page_include_snapshots() -> None:
+    """Test get_page uses correct query based on include_snapshots."""
+    return_value = {
+        "datasets": {
+            "edges": [],
+            "pageInfo": {"hasNextPage": False, "endCursor": None, "count": 0},
+        }
+    }
+
+    mock_client = Mock(
+        spec_set=gql.Client,
+        execute_async=AsyncMock(spec_set=dict, return_value=return_value),
+    )
+
+    # Default: should use GET_DATASETS
+    await get_page(mock_client, 100, None)
+    call_args = mock_client.execute_async.call_args
+    assert call_args[0][0] is GET_DATASETS
+
+    mock_client.execute_async.reset_mock()
+
+    # With include_snapshots=True: should use GET_DATASETS_WITH_SNAPSHOTS
+    await get_page(mock_client, 100, None, include_snapshots=True)
+    call_args = mock_client.execute_async.call_args
+    assert call_args[0][0] is GET_DATASETS_WITH_SNAPSHOTS

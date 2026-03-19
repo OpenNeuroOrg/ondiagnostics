@@ -61,6 +61,29 @@ async def list_s3_objects_pages(
                 yield [obj["Key"] for obj in page["Contents"]]
 
 
+async def list_s3_objects(
+    session: aioboto3.Session,
+    bucket_name: str,
+    prefix: str,
+) -> set[str]:
+    """Collect all S3 object keys under a prefix into a set.
+
+    Wraps list_s3_objects_pages() to collect paginated results.
+
+    Args:
+        session: aioboto3 Session
+        bucket_name: S3 bucket name
+        prefix: Prefix to filter objects
+
+    Returns:
+        Set of all S3 object keys under the prefix
+    """
+    keys: set[str] = set()
+    async for page in list_s3_objects_pages(session, bucket_name, prefix):
+        keys.update(page)
+    return keys
+
+
 async def plan_cleanup(
     dataset: Dataset,
     cache_dir: Path,
