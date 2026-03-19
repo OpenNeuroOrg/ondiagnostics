@@ -34,13 +34,10 @@ class Snapshot:
     hexsha: str
 
 
-LatestSnapshot = Snapshot
-
-
 @dataclass
 class DatasetNode:
     id: str
-    latestSnapshot: LatestSnapshot
+    latestSnapshot: Snapshot
     snapshots: list[Snapshot] | None = None
 
 
