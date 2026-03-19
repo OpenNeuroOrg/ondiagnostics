@@ -8,7 +8,7 @@ import pytest
 
 from ondiagnostics.graphql import Dataset
 from ondiagnostics.subprocs import SubprocessResult
-from ondiagnostics.tasks.git import check_remote, clone_dataset
+from ondiagnostics.tasks.git import GitRefs, check_remote, clone_dataset, list_refs
 
 
 # Tests for check_remote()
@@ -185,5 +185,85 @@ async def test_clone_dataset_fetch_failure(
         )
 
         result = await clone_dataset(sample_dataset, cache_dir)
+
+        assert result is None
+
+
+# Tests for list_refs()
+
+_LS_REMOTE_OUTPUT = (
+    "ref: refs/heads/main\tHEAD\n"
+    "aaa1111\tHEAD\n"
+    "aaa1111\trefs/heads/main\n"
+    "bbb2222\trefs/heads/dev\n"
+    "ccc3333\trefs/tags/1.0.0\n"
+    "ddd4444\trefs/tags/2.0.0\n"
+)
+
+
+async def test_list_refs_success() -> None:
+    """Test successful parsing with branches, tags, and HEAD symref."""
+    with patch("ondiagnostics.tasks.git.git") as mock_git:
+        mock_git.return_value = SubprocessResult(
+            (), 0, _LS_REMOTE_OUTPUT.encode(), b""
+        )
+
+        result = await list_refs("https://github.com/example/repo.git")
+
+        assert isinstance(result, GitRefs)
+        assert result.head == "main"
+        assert result.branches == {"main": "aaa1111", "dev": "bbb2222"}
+        assert result.tags == {"1.0.0": "ccc3333", "2.0.0": "ddd4444"}
+        mock_git.assert_called_once_with(
+            "ls-remote", "--symref", "https://github.com/example/repo.git"
+        )
+
+
+async def test_list_refs_no_symref() -> None:
+    """Test parsing when HEAD symref line is missing (head falls back to None)."""
+    output = (
+        "aaa1111\tHEAD\n"
+        "aaa1111\trefs/heads/main\n"
+        "ccc3333\trefs/tags/1.0.0\n"
+    )
+    with patch("ondiagnostics.tasks.git.git") as mock_git:
+        mock_git.return_value = SubprocessResult((), 0, output.encode(), b"")
+
+        result = await list_refs("https://github.com/example/repo.git")
+
+        assert isinstance(result, GitRefs)
+        assert result.head is None
+        assert result.branches == {"main": "aaa1111"}
+        assert result.tags == {"1.0.0": "ccc3333"}
+
+
+async def test_list_refs_empty_response() -> None:
+    """Test that an empty response returns None."""
+    with patch("ondiagnostics.tasks.git.git") as mock_git:
+        mock_git.return_value = SubprocessResult((), 0, b"   ", b"")
+
+        result = await list_refs("https://github.com/example/repo.git")
+
+        assert result is None
+
+
+async def test_list_refs_repository_not_found() -> None:
+    """Test that a missing repository returns None."""
+    with patch("ondiagnostics.tasks.git.git") as mock_git:
+        mock_git.return_value = SubprocessResult(
+            (), 128, b"", b"Repository not found."
+        )
+
+        result = await list_refs("https://github.com/example/missing.git")
+
+        assert result is None
+
+
+async def test_list_refs_nonzero_exit_code() -> None:
+    """Test that a non-zero exit code returns None."""
+    with patch("ondiagnostics.tasks.git.git") as mock_git:
+        mock_git.return_value = SubprocessResult((), 1, b"", b"some error")
+
+        result = await list_refs("https://github.com/example/repo.git")
 
         assert result is None

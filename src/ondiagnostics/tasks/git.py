@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from hashlib import sha1
 
 import pygit2
@@ -9,6 +10,13 @@ from ..subprocs import git
 TYPE_CHECKING = False
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+@dataclass
+class GitRefs:
+    head: str | None
+    branches: dict[str, str] = field(default_factory=dict)  # branch name -> SHA
+    tags: dict[str, str] = field(default_factory=dict)  # tag name -> SHA
 
 
 def worker_from_id(dataset_id: str) -> int:
@@ -56,6 +64,53 @@ async def check_remote(dataset: Dataset) -> Dataset | None:
         return None
 
     return dataset
+
+
+async def list_refs(repo_url: str) -> GitRefs | None:
+    """Run git ls-remote --symref and return structured ref map.
+
+    Returns None if the repository is not found or the command fails.
+    """
+    log = logger.bind(repo_url=repo_url)
+
+    result = await git("ls-remote", "--symref", repo_url)
+
+    if result.returncode:
+        if b"Repository not found" in result.stderr:
+            log.error("Missing repository")
+        else:
+            log.error("git ls-remote failed", returncode=result.returncode)
+        return None
+
+    if not result.stdout.strip():
+        log.error("Empty response from git ls-remote")
+        return None
+
+    lines = result.stdout.decode().strip().split("\n")
+    head_ref = None
+    branches: dict[str, str] = {}
+    tags: dict[str, str] = {}
+
+    for line in lines:
+        parts = line.split()
+        if parts[0] == "ref:":
+            # Format: "ref: refs/heads/master\tHEAD"
+            ref_target = parts[1]
+            head_ref = ref_target.split("/")[-1]
+            continue
+        if len(parts) != 2:
+            continue
+        sha, ref = parts
+        if ref == "HEAD":
+            continue
+        elif ref.startswith("refs/heads/"):
+            branch_name = ref.replace("refs/heads/", "")
+            branches[branch_name] = sha
+        elif ref.startswith("refs/tags/"):
+            tag_name = ref.replace("refs/tags/", "")
+            tags[tag_name] = sha
+
+    return GitRefs(head=head_ref, branches=branches, tags=tags)
 
 
 async def clone_dataset(dataset: Dataset, cache_dir: Path) -> Dataset | None:
