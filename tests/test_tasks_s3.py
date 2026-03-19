@@ -9,7 +9,7 @@ import aioboto3
 
 from aiomoto import mock_aws
 from ondiagnostics.graphql import Dataset
-from ondiagnostics.tasks.s3 import plan_cleanup, execute_cleanup, S3CleanupPlan
+from ondiagnostics.tasks.s3 import plan_cleanup, execute_cleanup, list_s3_objects, S3CleanupPlan
 
 
 type SessionSpec = tuple[aioboto3.Session, str]
@@ -63,6 +63,63 @@ async def populate_bucket(
         async with asyncio.TaskGroup() as tg:
             for key, content in data.items():
                 tg.create_task(s3.put_object(Bucket=bucket_name, Key=key, Body=content))
+
+
+# ============================================================================
+# list_s3_objects() tests
+# ============================================================================
+
+
+async def test_list_s3_objects_returns_correct_set(
+    mock_session: SessionSpec,
+    sample_dataset: Dataset,
+) -> None:
+    """Should return all object keys under the prefix as a set."""
+    session, bucket_name = mock_session
+    prefix = f"{sample_dataset.id}/"
+
+    expected_keys = {f"{prefix}file1.txt", f"{prefix}file2.txt", f"{prefix}file3.txt"}
+    await populate_bucket(
+        *mock_session,
+        {key: b"content" for key in expected_keys},
+    )
+
+    result = await list_s3_objects(session, bucket_name, prefix)
+
+    assert result == expected_keys
+
+
+async def test_list_s3_objects_empty_bucket_returns_empty_set(
+    mock_session: SessionSpec,
+    sample_dataset: Dataset,
+) -> None:
+    """Should return an empty set when no objects match the prefix."""
+    session, bucket_name = mock_session
+    prefix = f"{sample_dataset.id}/"
+
+    result = await list_s3_objects(session, bucket_name, prefix)
+
+    assert result == set()
+
+
+async def test_list_s3_objects_multiple_pages(
+    mock_session: SessionSpec,
+    sample_dataset: Dataset,
+) -> None:
+    """Should collect all keys across multiple pages into a single set."""
+    session, bucket_name = mock_session
+    prefix = f"{sample_dataset.id}/"
+
+    # Add enough objects to trigger pagination (>1000 per page in moto)
+    expected_keys = {f"{prefix}obj_{i:04d}.txt" for i in range(150)}
+    await populate_bucket(
+        *mock_session,
+        {key: b"content" for key in expected_keys},
+    )
+
+    result = await list_s3_objects(session, bucket_name, prefix)
+
+    assert result == expected_keys
 
 
 # ============================================================================
