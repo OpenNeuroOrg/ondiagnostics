@@ -28,16 +28,20 @@ class Dataset:
 
 
 @dataclass
-class LatestSnapshot:
+class Snapshot:
     tag: str
     created: str
     hexsha: str
+
+
+LatestSnapshot = Snapshot
 
 
 @dataclass
 class DatasetNode:
     id: str
     latestSnapshot: LatestSnapshot
+    snapshots: list[Snapshot] | None = None
 
 
 @dataclass
@@ -95,6 +99,37 @@ query DatasetsWithLatestSnapshots($count: Int, $after: String) {
   }
 }
 """)
+GET_DATASETS_WITH_SNAPSHOTS: gql.GraphQLRequest = gql.gql("""
+query DatasetsWithSnapshots($count: Int, $after: String) {
+  datasets(
+    first: $count,
+    after: $after,
+    orderBy: {created: ascending}
+    filterBy: {public: true}
+  ) {
+    edges {
+      node {
+        id
+        latestSnapshot {
+          tag
+          created
+          hexsha
+        }
+        snapshots {
+          tag
+          hexsha
+          created
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+      count
+    }
+  }
+}
+""")
 GET_SINGLE_DATASET: gql.GraphQLRequest = gql.gql("""
 query GetDataset($id: ID!) {
   dataset(id: $id) {
@@ -115,12 +150,13 @@ def create_client() -> gql.Client:
 
 @stamina.retry(on=httpx.HTTPError)
 async def get_page(
-    client: gql.Client, count: int, after: str | None
+    client: gql.Client, count: int, after: str | None, *, include_snapshots: bool = False
 ) -> GraphQLResponse:
     """Fetch a page of datasets from the GraphQL API."""
+    query = GET_DATASETS_WITH_SNAPSHOTS if include_snapshots else GET_DATASETS
     try:
         result = await client.execute_async(
-            GET_DATASETS, variable_values={"count": count, "after": after}
+            query, variable_values={"count": count, "after": after}
         )
     except TransportQueryError as e:
         if e.data is not None:
