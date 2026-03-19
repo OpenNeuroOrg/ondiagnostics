@@ -111,7 +111,7 @@ async def test_list_s3_objects_multiple_pages(
     prefix = f"{sample_dataset.id}/"
 
     # Add enough objects to trigger pagination (>1000 per page in moto)
-    expected_keys = {f"{prefix}obj_{i:04d}.txt" for i in range(150)}
+    expected_keys = {f"{prefix}obj_{i:04d}.txt" for i in range(1500)}
     await populate_bucket(
         *mock_session,
         {key: b"content" for key in expected_keys},
