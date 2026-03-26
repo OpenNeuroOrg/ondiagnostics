@@ -66,25 +66,29 @@ async def check_remote(dataset: Dataset) -> Dataset | None:
     return dataset
 
 
-async def list_refs(repo_url: str) -> GitRefs | None:
+async def list_refs(repo_url: str) -> GitRefs | str:
     """Run git ls-remote --symref and return structured ref map.
 
-    Returns None if the repository is not found or the command fails.
+    Returns a string sentinel on failure:
+    - ``"repo-not-found"`` – the remote repository does not exist.
+    - ``"command-failed"`` – git ls-remote exited with a non-zero status.
+    - ``"repo-empty"`` – the repository exists but has no refs.
     """
     log = logger.bind(repo_url=repo_url)
 
     result = await git("ls-remote", "--symref", repo_url)
 
     if result.returncode:
-        if b"Repository not found" in result.stderr:
+        if b"fatal:" in result.stderr and b"not found" in result.stderr:
             log.error("Missing repository")
+            return "repo-not-found"
         else:
             log.error("git ls-remote failed", returncode=result.returncode)
-        return None
+            return "command-failed"
 
     if not result.stdout.strip():
         log.error("Empty response from git ls-remote")
-        return None
+        return "repo-empty"
 
     lines = result.stdout.decode().strip().split("\n")
     head_ref = None
