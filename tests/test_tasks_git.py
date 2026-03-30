@@ -238,32 +238,32 @@ async def test_list_refs_no_symref() -> None:
 
 
 async def test_list_refs_empty_response() -> None:
-    """Test that an empty response returns None."""
+    """Test that an empty response returns correct string."""
     with patch("ondiagnostics.tasks.git.git") as mock_git:
         mock_git.return_value = SubprocessResult((), 0, b"   ", b"")
 
         result = await list_refs("https://github.com/example/repo.git")
 
-        assert result is None
+        assert result == 'repo-empty'
 
 
 async def test_list_refs_repository_not_found() -> None:
-    """Test that a missing repository returns None."""
+    """Test that a missing repository returns correct string."""
     with patch("ondiagnostics.tasks.git.git") as mock_git:
         mock_git.return_value = SubprocessResult(
-            (), 128, b"", b"Repository not found."
+            (), 128, b"", b"fatal: Repository not found."
         )
 
         result = await list_refs("https://github.com/example/missing.git")
 
-        assert result is None
+        assert result == 'repo-not-found'
 
 
 async def test_list_refs_nonzero_exit_code() -> None:
-    """Test that a non-zero exit code returns None."""
+    """Test that a non-zero exit code returns correct string."""
     with patch("ondiagnostics.tasks.git.git") as mock_git:
         mock_git.return_value = SubprocessResult((), 1, b"", b"some error")
 
         result = await list_refs("https://github.com/example/repo.git")
 
-        assert result is None
+        assert result == 'command-failed'
